@@ -21,7 +21,7 @@ if [ "$DEBUG" == "--debug" ]; then
 fi
 
 OUTFILE="pcfusage_${ORG_NAME}_$(date +%Y%m%d%H%M%S).csv"
-echo "Org,Space,App,Process Type,Instances,Memory(MB),Disk(MB),State,Buildpacks,Routes" > "$OUTFILE"
+echo "Org,Space,App,Process Type,Instances,Memory(MB),Disk(MB),State,Buildpacks,Buildpack Details,Runtime Version,Routes,Domains,Service Instances,Service Bindings,Env Vars,Security Groups" > "$OUTFILE"
 
 # ---------------------------------------------------------------------------
 # Helper functions
@@ -83,6 +83,11 @@ fi
 for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
   SPACE_NAME=$(echo "$SPACES_JSON" | jq -r --arg guid "$SPACE_GUID" '.resources[] | select(.guid==$guid) | .name')
   echo "➡️  Processing space: ${SPACE_NAME} (${SPACE_GUID})"
+  SPACE_SECURITY_GROUPS=$(cf_curl_safe "/v3/security_groups?space_guids=${SPACE_GUID}" \
+    | jq -r '[(.resources // [])[]?.name // empty] | map(select(length>0)) | join(";")')
+  if [ "$SPACE_SECURITY_GROUPS" == "null" ]; then
+    SPACE_SECURITY_GROUPS=""
+  fi
 
   # -------------------------------------------------------------------------
   # List Apps in Space
@@ -101,10 +106,123 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
     APP_STATE=$(echo "$APPS_JSON" | jq -r --arg guid "$APP_GUID" '.resources[] | select(.guid==$guid) | .state')
 
     # Buildpacks
-    BUILDPACKS=$(cf_curl_safe "/v3/apps/${APP_GUID}" | jq -r '.lifecycle.buildpacks // [] | join(";")')
+    APP_DETAILS=$(cf_curl_safe "/v3/apps/${APP_GUID}")
+    LIFECYCLE_TYPE=$(echo "$APP_DETAILS" | jq -r '.lifecycle.type // empty')
+    BUILDPACKS=""
+    BUILDPACK_DETAILS=""
+    RUNTIME_VERSION=""
 
-    # Routes
-    ROUTES=$(cf_curl_safe "/v3/routes?app_guids=${APP_GUID}" | jq -r '[.resources[].url] // [] | join(";")')
+    if [ "$LIFECYCLE_TYPE" == "buildpack" ]; then
+      CURRENT_DROPLET_GUID=$(cf_curl_safe "/v3/apps/${APP_GUID}/relationships/current_droplet" | jq -r '.data.guid // empty')
+      if [ -n "$CURRENT_DROPLET_GUID" ]; then
+        DROPLET_JSON=$(cf_curl_safe "/v3/droplets/${CURRENT_DROPLET_GUID}")
+        BUILDPACKS=$(echo "$DROPLET_JSON" | jq -r '[.buildpacks[]?.name] // [] | map(select(length>0)) | join(";")')
+        BUILDPACK_DETAILS=$(echo "$DROPLET_JSON" | jq -r '
+          [.buildpacks[]? | [.name, (.version // ""), (.detect_output // "")]
+           | map(select(length>0)) | join(" ")] | map(select(length>0)) | join(";")')
+        RUNTIME_VERSION=$(echo "$DROPLET_JSON" | jq -r '
+          (.environment_variables // {}) as $env |
+          $env.BP_JVM_VERSION // $env.BP_JAVA_VERSION // $env.JAVA_VERSION // empty')
+      fi
+    fi
+
+    if [ -z "$BUILDPACKS" ] || [ "$BUILDPACKS" == "null" ]; then
+      BUILDPACKS=$(echo "$APP_DETAILS" | jq -r '.lifecycle.data.buildpacks // [] | map(select(length>0)) | join(";")')
+    fi
+    if [ "$BUILDPACK_DETAILS" == "null" ]; then
+      BUILDPACK_DETAILS=""
+    fi
+    if [ "$RUNTIME_VERSION" == "null" ]; then
+      RUNTIME_VERSION=""
+    fi
+
+    # Routes & domains
+    ROUTES_JSON=$(cf_curl_safe "/v3/routes?app_guids=${APP_GUID}")
+    ROUTES=$(echo "$ROUTES_JSON" | jq -r '[(.resources // [])[]?.url // empty] | map(select(length>0)) | join(";")')
+    if [ "$ROUTES" == "null" ]; then
+      ROUTES=""
+    fi
+    DOMAINS=""
+    DOMAIN_GUIDS=$(echo "$ROUTES_JSON" | jq -r '(.resources // [])[]?.relationships.domain.data.guid | select(length>0)')
+    if [ -n "$DOMAIN_GUIDS" ]; then
+      while read -r DOMAIN_GUID; do
+        [ -z "$DOMAIN_GUID" ] && continue
+        DOMAIN_NAME=$(cf_curl_safe "/v3/domains/${DOMAIN_GUID}" | jq -r '.name // empty')
+        if [ -n "$DOMAIN_NAME" ]; then
+          if [ -n "$DOMAINS" ]; then
+            DOMAINS="${DOMAINS};${DOMAIN_NAME}"
+          else
+            DOMAINS="$DOMAIN_NAME"
+          fi
+        fi
+      done < <(printf "%s\n" "$DOMAIN_GUIDS" | sort -u)
+    fi
+
+    # Services & bindings
+    SERVICE_BINDINGS_JSON=$(cf_curl_safe "/v3/service_credential_bindings?app_guids=${APP_GUID}")
+    SERVICE_BINDINGS=$(echo "$SERVICE_BINDINGS_JSON" | jq -r '[(.resources // [])[]?.name // empty] | map(select(length>0)) | join(";")')
+    if [ "$SERVICE_BINDINGS" == "null" ]; then
+      SERVICE_BINDINGS=""
+    fi
+    SERVICE_INSTANCES=""
+    SERVICE_INSTANCE_GUIDS=$(echo "$SERVICE_BINDINGS_JSON" | jq -r '(.resources // [])[]?.relationships.service_instance.data.guid | select(length>0)')
+    if [ -n "$SERVICE_INSTANCE_GUIDS" ]; then
+      while read -r SERVICE_INSTANCE_GUID; do
+        [ -z "$SERVICE_INSTANCE_GUID" ] && continue
+        SERVICE_INSTANCE_JSON=$(cf_curl_safe "/v3/service_instances/${SERVICE_INSTANCE_GUID}")
+        SERVICE_INSTANCE_NAME=$(echo "$SERVICE_INSTANCE_JSON" | jq -r '.name // empty')
+        SERVICE_INSTANCE_TYPE=$(echo "$SERVICE_INSTANCE_JSON" | jq -r '.type // empty')
+        SERVICE_PLAN_GUID=$(echo "$SERVICE_INSTANCE_JSON" | jq -r '.relationships.service_plan.data.guid // empty')
+        SERVICE_PLAN_NAME=""
+        SERVICE_OFFERING_NAME=""
+        if [ -n "$SERVICE_PLAN_GUID" ]; then
+          SERVICE_PLAN_JSON=$(cf_curl_safe "/v3/service_plans/${SERVICE_PLAN_GUID}")
+          SERVICE_PLAN_NAME=$(echo "$SERVICE_PLAN_JSON" | jq -r '.name // empty')
+          SERVICE_OFFERING_GUID=$(echo "$SERVICE_PLAN_JSON" | jq -r '.relationships.service_offering.data.guid // empty')
+          if [ -n "$SERVICE_OFFERING_GUID" ]; then
+            SERVICE_OFFERING_NAME=$(cf_curl_safe "/v3/service_offerings/${SERVICE_OFFERING_GUID}" | jq -r '.name // empty')
+          fi
+        fi
+        ENTRY="$SERVICE_INSTANCE_NAME"
+        if [ -z "$ENTRY" ]; then
+          ENTRY="$SERVICE_INSTANCE_GUID"
+        fi
+        DETAILS=""
+        if [ -n "$SERVICE_OFFERING_NAME" ]; then
+          DETAILS="$SERVICE_OFFERING_NAME"
+        fi
+        if [ -n "$SERVICE_PLAN_NAME" ]; then
+          if [ -n "$DETAILS" ]; then
+            DETAILS="${DETAILS}/${SERVICE_PLAN_NAME}"
+          else
+            DETAILS="$SERVICE_PLAN_NAME"
+          fi
+        fi
+        if [ -n "$SERVICE_INSTANCE_TYPE" ]; then
+          if [ -n "$DETAILS" ]; then
+            DETAILS="${DETAILS} (${SERVICE_INSTANCE_TYPE})"
+          else
+            DETAILS="$SERVICE_INSTANCE_TYPE"
+          fi
+        fi
+        if [ -n "$DETAILS" ]; then
+          ENTRY="${ENTRY} [${DETAILS}]"
+        fi
+        if [ -n "$SERVICE_INSTANCES" ]; then
+          SERVICE_INSTANCES="${SERVICE_INSTANCES};${ENTRY}"
+        else
+          SERVICE_INSTANCES="$ENTRY"
+        fi
+      done < <(printf "%s\n" "$SERVICE_INSTANCE_GUIDS" | sort -u)
+    fi
+
+    # Environment variables (user-provided)
+    ENV_VARS=$(cf_curl_safe "/v3/apps/${APP_GUID}/env" | jq -r '
+      (.environment_variables // {}) | to_entries |
+      map("\(.key)=\(.value|tostring)") | join(";")')
+    if [ "$ENV_VARS" == "null" ]; then
+      ENV_VARS=""
+    fi
 
     # Processes (memory/disk/instances)
     PROCESSES_JSON=$(cf_curl_safe "/v3/processes?app_guids=${APP_GUID}")
@@ -121,7 +239,7 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
       INSTANCES=$(_jq '.instances')
       MEM=$(_jq '.memory_in_mb')
       DISK=$(_jq '.disk_in_mb')
-      echo "${ORG_NAME},${SPACE_NAME},${APP_NAME},${TYPE},${INSTANCES},${MEM},${DISK},${APP_STATE},${BUILDPACKS},${ROUTES}" >> "$OUTFILE"
+      echo "${ORG_NAME},${SPACE_NAME},${APP_NAME},${TYPE},${INSTANCES},${MEM},${DISK},${APP_STATE},${BUILDPACKS},${BUILDPACK_DETAILS},${RUNTIME_VERSION},${ROUTES},${DOMAINS},${SERVICE_INSTANCES},${SERVICE_BINDINGS},${ENV_VARS},${SPACE_SECURITY_GROUPS}" >> "$OUTFILE"
     done
   done
 done
@@ -132,4 +250,3 @@ if [ "$DEBUG" == "--debug" ]; then
   echo "🔍 CSV preview:"
   head -n 10 "$OUTFILE"
 fi
-
