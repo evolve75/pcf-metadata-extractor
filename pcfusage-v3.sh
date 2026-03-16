@@ -439,6 +439,12 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
       "/v3/service_credential_bindings?app_guids=${APP_GUID}" \
       "Service bindings for app '${APP_NAME}'" \
       cf_curl_safe)
+
+    # Validate service bindings response
+    if ! validate_json_response "$SERVICE_BINDINGS_JSON" "Service bindings for ${APP_NAME}"; then
+      echo "   ⚠️  WARNING: Failed to retrieve service bindings for '${APP_NAME}' - service information may be incomplete" >&2
+    fi
+
     SERVICE_BINDINGS=$(echo "$SERVICE_BINDINGS_JSON" | jq -r '[(.resources // [])[]?.name // empty] | map(select(length>0)) | join(";")')
     if [ "$SERVICE_BINDINGS" == "null" ]; then
       SERVICE_BINDINGS=""
@@ -451,6 +457,13 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
         SERVICE_INSTANCE_JSON=$(cf_curl_optional \
           "/v3/service_instances/${SERVICE_INSTANCE_GUID}" \
           "Service instance ${SERVICE_INSTANCE_GUID}")
+
+        # Validate service instance response
+        if ! validate_json_response "$SERVICE_INSTANCE_JSON" "Service instance ${SERVICE_INSTANCE_GUID}"; then
+          debug "Failed to retrieve service instance details for ${SERVICE_INSTANCE_GUID}"
+          continue
+        fi
+
         SERVICE_INSTANCE_NAME=$(echo "$SERVICE_INSTANCE_JSON" | jq -r '.name // empty')
         SERVICE_INSTANCE_TYPE=$(echo "$SERVICE_INSTANCE_JSON" | jq -r '.type // empty')
         SERVICE_PLAN_GUID=$(echo "$SERVICE_INSTANCE_JSON" | jq -r '.relationships.service_plan.data.guid // empty')
