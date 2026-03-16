@@ -11,17 +11,17 @@ set -euo pipefail
 ORG_NAME="${1:-}"
 DEBUG="${2:-}"
 
-if [ -z "$ORG_NAME" ]; then
+if [[ -z "${ORG_NAME}" ]]; then
   echo "Usage: $0 <org_name> [--debug]"
   exit 1
 fi
 
-if [ "$DEBUG" == "--debug" ]; then
+if [[ "${DEBUG}" == "--debug" ]]; then
   echo "🔍 Debug mode enabled"
 fi
 
 OUTFILE="pcfusage_${ORG_NAME}_$(date +%Y%m%d%H%M%S).csv"
-echo "Org,Space,App,Process Type,Instances,Memory(MB),Disk(MB),State,Buildpacks,Buildpack Details,Runtime Version,Routes,Domains,Service Instances,Service Bindings,Env Vars,Security Groups" > "$OUTFILE"
+echo "Org,Space,App,Process Type,Instances,Memory(MB),Disk(MB),State,Buildpacks,Buildpack Details,Runtime Version,Routes,Domains,Service Instances,Service Bindings,Env Vars,Security Groups" > "${OUTFILE}"
 
 # Data quality tracking
 WARNING_COUNT=0
@@ -31,7 +31,7 @@ WARNING_COUNT=0
 # ---------------------------------------------------------------------------
 
 function debug() {
-  if [ "$DEBUG" == "--debug" ]; then
+  if [[ "${DEBUG}" == "--debug" ]]; then
     echo "DEBUG: $*" >&2
   fi
 }
@@ -45,14 +45,14 @@ function escape_csv() {
   local field="$1"
 
   # Check if field contains special characters
-  if [[ "$field" =~ [,\"$'\n'$'\r'] ]]; then
+  if [[ "${field}" =~ [,\"$'\n'$'\r'] ]]; then
     # Escape quotes by doubling them
     field="${field//\"/\"\"}"
     # Enclose in quotes
-    echo "\"$field\""
+    echo "\"${field}\""
   else
     # No special characters, return as-is
-    echo "$field"
+    echo "${field}"
   fi
 }
 
@@ -66,10 +66,10 @@ function classify_error() {
   local exit_code="$3"
 
   # Check JSON for CF API error codes
-  if echo "$response" | jq -e '.errors' >/dev/null 2>&1; then
+  if echo "${response}" | jq -e '.errors' >/dev/null 2>&1; then
     local error_code
-    error_code=$(echo "$response" | jq -r '.errors[0].code // empty')
-    case "$error_code" in
+    error_code=$(echo "${response}" | jq -r '.errors[0].code // empty')
+    case "${error_code}" in
       10002|10003) echo "auth_error" ;;      # Unauthorized/Forbidden
       10004|10010) echo "not_found" ;;       # Not found
       1000|10008)  echo "client_error" ;;    # Bad request/Validation
@@ -79,13 +79,13 @@ function classify_error() {
   fi
 
   # Check stderr for network/connection errors
-  if echo "$error_msg" | grep -qi "connection refused\|timeout\|network\|DNS"; then
+  if echo "${error_msg}" | grep -qi "connection refused\|timeout\|network\|DNS"; then
     echo "network_error"
-  elif echo "$error_msg" | grep -qi "unauthorized\|401\|403"; then
+  elif echo "${error_msg}" | grep -qi "unauthorized\|401\|403"; then
     echo "auth_error"
-  elif echo "$error_msg" | grep -qi "not found\|404"; then
+  elif echo "${error_msg}" | grep -qi "not found\|404"; then
     echo "not_found"
-  elif echo "$error_msg" | grep -qi "50[0-9]\|bad gateway\|service unavailable"; then
+  elif echo "${error_msg}" | grep -qi "50[0-9]\|bad gateway\|service unavailable"; then
     echo "server_error"
   else
     echo "server_error"  # Default to retry-eligible for safety
@@ -102,7 +102,7 @@ function cf_curl_with_retry() {
   local attempt=0
   local backoff=2
 
-  while [ "$attempt" -le "$max_retries" ]; do
+  while [[ "${attempt}" -le "${max_retries}" ]]; do
     local tmpfile_out
     tmpfile_out=$(mktemp)
     local tmpfile_err
@@ -110,39 +110,39 @@ function cf_curl_with_retry() {
     local exit_code=0
 
     debug "API call attempt $((attempt+1))/$((max_retries+1)): cf curl ${endpoint}"
-    cf curl "${endpoint}" > "$tmpfile_out" 2> "$tmpfile_err" || exit_code=$?
+    cf curl "${endpoint}" > "${tmpfile_out}" 2> "${tmpfile_err}" || exit_code=$?
 
     local response
-    response=$(cat "$tmpfile_out")
+    response=$(cat "${tmpfile_out}")
     local error_msg
-    error_msg=$(cat "$tmpfile_err")
-    rm -f "$tmpfile_out" "$tmpfile_err"
+    error_msg=$(cat "${tmpfile_err}")
+    rm -f "${tmpfile_out}" "${tmpfile_err}"
 
     # Success: valid JSON without errors field
-    if [ $exit_code -eq 0 ] && echo "$response" | jq -e 'has("errors") | not' >/dev/null 2>&1; then
-      echo "$response"
+    if [[ "${exit_code}" -eq 0 ]] && echo "${response}" | jq -e 'has("errors") | not' >/dev/null 2>&1; then
+      echo "${response}"
       return 0
     fi
 
     # Classify error type
     local error_type
-    error_type=$(classify_error "$response" "$error_msg" "$exit_code")
+    error_type=$(classify_error "${response}" "${error_msg}" "${exit_code}")
 
-    case "$error_type" in
+    case "${error_type}" in
       "auth_error"|"not_found"|"client_error")
         # Permanent errors - don't retry
         echo "ERROR: Permanent error calling ${endpoint}: ${error_msg}" >&2
-        if [ -n "$response" ] && echo "$response" | jq -e '.errors' >/dev/null 2>&1; then
-          echo "$response" | jq -r '.errors[]? | "  \(.title // .detail // .code)"' >&2
+        if [[ -n "${response}" ]] && echo "${response}" | jq -e '.errors' >/dev/null 2>&1; then
+          echo "${response}" | jq -r '.errors[]? | "  \(.title // .detail // .code)"' >&2
         fi
         echo "__ERROR_PERMANENT__"
         return 2
         ;;
       "network_error"|"server_error")
         # Transient errors - retry with backoff
-        if [ "$attempt" -lt "$max_retries" ]; then
+        if [[ "${attempt}" -lt "${max_retries}" ]]; then
           echo "WARNING: Transient error (attempt $((attempt+1))/$((max_retries+1))): ${error_msg}" >&2
-          sleep $backoff
+          sleep "${backoff}"
           backoff=$((backoff * 2))
         else
           echo "ERROR: Max retries exceeded for ${endpoint}" >&2
@@ -152,9 +152,9 @@ function cf_curl_with_retry() {
         ;;
       *)
         # Unexpected error type - treat as transient for safety
-        echo "WARNING: Unexpected error type '$error_type' - treating as transient" >&2
-        if [ "$attempt" -lt "$max_retries" ]; then
-          sleep $backoff
+        echo "WARNING: Unexpected error type '${error_type}' - treating as transient" >&2
+        if [[ "${attempt}" -lt "${max_retries}" ]]; then
+          sleep "${backoff}"
           backoff=$((backoff * 2))
         else
           echo "__ERROR_TRANSIENT__"
@@ -176,14 +176,14 @@ function cf_curl_critical() {
   local endpoint="$1"
   local context="${2:-API call}"
   local result
-  result=$(cf_curl_with_retry "$endpoint" 3)
+  result=$(cf_curl_with_retry "${endpoint}" 3)
 
-  if [[ "$result" == "__ERROR_"* ]]; then
+  if [[ "${result}" == "__ERROR_"* ]]; then
     echo "❌ Critical error: ${context} failed" >&2
     echo "   Endpoint: ${endpoint}" >&2
     exit 1
   fi
-  echo "$result"
+  echo "${result}"
 }
 
 # ---------------------------------------------------------------------------
@@ -193,14 +193,14 @@ function cf_curl_optional() {
   local endpoint="$1"
   local context="${2:-Optional data}"
   local result
-  result=$(cf_curl_with_retry "$endpoint" 2)  # Fewer retries for optional
+  result=$(cf_curl_with_retry "${endpoint}" 2)  # Fewer retries for optional
 
-  if [[ "$result" == "__ERROR_"* ]]; then
+  if [[ "${result}" == "__ERROR_"* ]]; then
     echo "⚠️  Warning: ${context} unavailable (${endpoint})" >&2
     echo "{}"
     return 0
   fi
-  echo "$result"
+  echo "${result}"
 }
 
 # ---------------------------------------------------------------------------
@@ -209,13 +209,13 @@ function cf_curl_optional() {
 function cf_curl_safe() {
   local endpoint="$1"
   local result
-  result=$(cf_curl_with_retry "$endpoint" 3)
+  result=$(cf_curl_with_retry "${endpoint}" 3)
 
-  if [[ "$result" == "__ERROR_"* ]]; then
+  if [[ "${result}" == "__ERROR_"* ]]; then
     echo "{}"
     return 0
   fi
-  echo "$result"
+  echo "${result}"
 }
 
 # ---------------------------------------------------------------------------
@@ -227,48 +227,48 @@ function fetch_all_pages() {
   local description="$2"
   local curl_function="${3:-cf_curl_critical}"  # Default to critical
 
-  debug "Fetching all pages for: $initial_url"
+  debug "Fetching all pages for: ${initial_url}"
 
   # Fetch first page
   local page_result
-  page_result=$($curl_function "$initial_url" "$description")
+  page_result=$(${curl_function} "${initial_url}" "${description}")
 
   # Extract resources and pagination info
   local all_resources
-  all_resources=$(echo "$page_result" | jq -c '.resources // []')
+  all_resources=$(echo "${page_result}" | jq -c '.resources // []')
   local next_url
-  next_url=$(echo "$page_result" | jq -r '.pagination.next.href // empty')
+  next_url=$(echo "${page_result}" | jq -r '.pagination.next.href // empty')
   local total_results
-  total_results=$(echo "$page_result" | jq -r '.pagination.total_results // 0')
+  total_results=$(echo "${page_result}" | jq -r '.pagination.total_results // 0')
   local page_num=1
 
   # Follow pagination links
-  while [ -n "$next_url" ]; do
+  while [[ -n "${next_url}" ]]; do
     page_num=$((page_num + 1))
-    debug "Fetching page $page_num: $next_url"
+    debug "Fetching page ${page_num}: ${next_url}"
 
-    page_result=$($curl_function "$next_url" "$description (page $page_num)")
+    page_result=$(${curl_function} "${next_url}" "${description} (page ${page_num})")
 
     # Append resources to accumulated array
     local page_resources
-    page_resources=$(echo "$page_result" | jq -c '.resources // []')
-    all_resources=$(echo "$all_resources $page_resources" | jq -s 'add')
+    page_resources=$(echo "${page_result}" | jq -c '.resources // []')
+    all_resources=$(echo "${all_resources} ${page_resources}" | jq -s 'add')
 
     # Get next page URL
-    next_url=$(echo "$page_result" | jq -r '.pagination.next.href // empty')
+    next_url=$(echo "${page_result}" | jq -r '.pagination.next.href // empty')
   done
 
   local fetched_count
-  fetched_count=$(echo "$all_resources" | jq 'length')
-  if [ "$fetched_count" != "$total_results" ]; then
-    debug "WARNING: Fetched $fetched_count items but API reported $total_results total"
+  fetched_count=$(echo "${all_resources}" | jq 'length')
+  if [[ "${fetched_count}" != "${total_results}" ]]; then
+    debug "WARNING: Fetched ${fetched_count} items but API reported ${total_results} total"
   fi
 
   # Return combined result with updated pagination
   jq -n \
-    --argjson resources "$all_resources" \
-    --argjson total "$total_results" \
-    --argjson fetched "$fetched_count" \
+    --argjson resources "${all_resources}" \
+    --argjson total "${total_results}" \
+    --argjson fetched "${fetched_count}" \
     '{
       pagination: {
         total_results: $total,
@@ -289,14 +289,14 @@ function validate_json_response() {
   local context="${2:-API response}"
 
   # Check if response is literally "{}" (empty object from cf_curl_safe error)
-  if [ "$json" == "{}" ]; then
+  if [[ "${json}" == "{}" ]]; then
     debug "⚠️  WARNING: Empty API response for ${context}"
     WARNING_COUNT=$((WARNING_COUNT + 1))
     return 1
   fi
 
   # Check if response is valid JSON with content
-  if ! echo "$json" | jq -e 'type' >/dev/null 2>&1; then
+  if ! echo "${json}" | jq -e 'type' >/dev/null 2>&1; then
     debug "⚠️  WARNING: Invalid JSON response for ${context}"
     WARNING_COUNT=$((WARNING_COUNT + 1))
     return 1
@@ -312,13 +312,13 @@ function validate_json_response() {
 function redact_sensitive_value() {
   local key="$1"
   local key_upper
-  key_upper=$(echo "$key" | tr '[:lower:]' '[:upper:]')
+  key_upper=$(echo "${key}" | tr '[:lower:]' '[:upper:]')
 
   # Sensitive keyword patterns (case-insensitive substring matching)
   local patterns="PASSWORD PASSWD PWD SECRET PRIVATE KEY APIKEY TOKEN AUTH CREDENTIAL CERT CERTIFICATE DATABASE_URL DB_URL JDBC_URL URI"
 
-  for pattern in $patterns; do
-    if [[ "$key_upper" == *"$pattern"* ]]; then
+  for pattern in ${patterns}; do
+    if [[ "${key_upper}" == *"${pattern}"* ]]; then
       return 0  # Sensitive
     fi
   done
@@ -334,7 +334,7 @@ function sanitize_json_recursive() {
   local json="$1"
 
   # Use jq walk to recursively process all object fields
-  echo "$json" | jq 'walk(
+  echo "${json}" | jq 'walk(
     if type == "object" then
       to_entries | map(
         if (.key | ascii_upcase | test("PASSWORD|PASSWD|PWD|SECRET|PRIVATE|KEY|APIKEY|TOKEN|AUTH|CREDENTIAL|CERT|CERTIFICATE|DATABASE_URL|DB_URL|JDBC_URL|URI")) then
@@ -358,18 +358,18 @@ function sanitize_env_var() {
   local value="$2"
 
   # First check if the key itself is sensitive
-  if redact_sensitive_value "$key"; then
+  if redact_sensitive_value "${key}"; then
     echo "<REDACTED>"
     return 0
   fi
 
   # Try to parse value as JSON
-  if echo "$value" | jq -e '.' >/dev/null 2>&1; then
+  if echo "${value}" | jq -e '.' >/dev/null 2>&1; then
     # Valid JSON - sanitize recursively
-    sanitize_json_recursive "$value"
+    sanitize_json_recursive "${value}"
   else
     # Not JSON - return original value (key already checked above)
-    echo "$value"
+    echo "${value}"
   fi
 }
 
@@ -381,17 +381,17 @@ function sanitize_environment_variables() {
   local env_vars_json="$1"
 
   # Validate input
-  if ! validate_json_response "$env_vars_json" "Environment variables"; then
+  if ! validate_json_response "${env_vars_json}" "Environment variables"; then
     echo ""
     return 0
   fi
 
   # Extract environment_variables object
   local env_object
-  env_object=$(echo "$env_vars_json" | jq -r '.environment_variables // {}')
+  env_object=$(echo "${env_vars_json}" | jq -r '.environment_variables // {}')
 
   # If no environment variables, return empty
-  if [ "$env_object" == "{}" ] || [ "$env_object" == "null" ]; then
+  if [[ "${env_object}" == "{}" ]] || [[ "${env_object}" == "null" ]]; then
     echo ""
     return 0
   fi
@@ -399,26 +399,26 @@ function sanitize_environment_variables() {
   # Process each key-value pair
   local sanitized_vars=""
   while IFS='=' read -r key value; do
-    [ -z "$key" ] && continue
+    [[ -z "${key}" ]] && continue
 
     # Sanitize the value
     local sanitized_value
-    sanitized_value=$(sanitize_env_var "$key" "$value")
+    sanitized_value=$(sanitize_env_var "${key}" "${value}")
 
     # Debug log if value was redacted
-    if [ "$sanitized_value" == "<REDACTED>" ]; then
+    if [[ "${sanitized_value}" == "<REDACTED>" ]]; then
       debug "Redacted sensitive environment variable: ${key}"
     fi
 
     # Build result string
-    if [ -n "$sanitized_vars" ]; then
+    if [[ -n "${sanitized_vars}" ]]; then
       sanitized_vars="${sanitized_vars};${key}=${sanitized_value}"
     else
       sanitized_vars="${key}=${sanitized_value}"
     fi
-  done < <(echo "$env_object" | jq -r 'to_entries | map("\(.key)=\(.value | tostring)") | .[]')
+  done < <(echo "${env_object}" | jq -r 'to_entries | map("\(.key)=\(.value | tostring)") | .[]')
 
-  echo "$sanitized_vars"
+  echo "${sanitized_vars}"
 }
 
 # ---------------------------------------------------------------------------
@@ -426,7 +426,7 @@ function sanitize_environment_variables() {
 # ---------------------------------------------------------------------------
 
 for cmd in cf jq; do
-  command -v "$cmd" >/dev/null 2>&1 || { echo "❌ $cmd not found in PATH"; exit 1; }
+  command -v "${cmd}" >/dev/null 2>&1 || { echo "❌ ${cmd} not found in PATH"; exit 1; }
 done
 
 if ! cf target >/dev/null 2>&1; then
@@ -442,7 +442,7 @@ debug "Fetching org GUID for ${ORG_NAME}"
 ORG_GUID=$(cf_curl_critical "/v3/organizations?names=${ORG_NAME}" \
            "Organization '${ORG_NAME}' lookup" | jq -r '.resources[0].guid // empty')
 
-if [ -z "$ORG_GUID" ]; then
+if [[ -z "${ORG_GUID}" ]]; then
   echo "❌ Organization '${ORG_NAME}' not found."
   echo "Available orgs:"
   cf curl /v3/organizations | jq -r '.resources[].name'
@@ -461,7 +461,7 @@ ORG_SECURITY_GROUPS=$(fetch_all_pages \
   cf_curl_safe \
   | jq -r '[(.resources // [])[]?.name // empty] | map("org:" + .) | map(select(length>4)) | join(";")')
 
-if [ "$ORG_SECURITY_GROUPS" == "null" ] || [ -z "$ORG_SECURITY_GROUPS" ]; then
+if [[ "${ORG_SECURITY_GROUPS}" == "null" ]] || [[ -z "${ORG_SECURITY_GROUPS}" ]]; then
   ORG_SECURITY_GROUPS=""
 fi
 debug "Org security groups: ${ORG_SECURITY_GROUPS}"
@@ -486,14 +486,14 @@ GLOBAL_STAGING_GROUPS=$(fetch_all_pages \
 
 # Combine global groups
 GLOBAL_SECURITY_GROUPS=""
-if [ -n "$GLOBAL_RUNNING_GROUPS" ] && [ "$GLOBAL_RUNNING_GROUPS" != "null" ]; then
-  GLOBAL_SECURITY_GROUPS="$GLOBAL_RUNNING_GROUPS"
+if [[ -n "${GLOBAL_RUNNING_GROUPS}" ]] && [[ "${GLOBAL_RUNNING_GROUPS}" != "null" ]]; then
+  GLOBAL_SECURITY_GROUPS="${GLOBAL_RUNNING_GROUPS}"
 fi
-if [ -n "$GLOBAL_STAGING_GROUPS" ] && [ "$GLOBAL_STAGING_GROUPS" != "null" ]; then
-  if [ -n "$GLOBAL_SECURITY_GROUPS" ]; then
+if [[ -n "${GLOBAL_STAGING_GROUPS}" ]] && [[ "${GLOBAL_STAGING_GROUPS}" != "null" ]]; then
+  if [[ -n "${GLOBAL_SECURITY_GROUPS}" ]]; then
     GLOBAL_SECURITY_GROUPS="${GLOBAL_SECURITY_GROUPS};${GLOBAL_STAGING_GROUPS}"
   else
-    GLOBAL_SECURITY_GROUPS="$GLOBAL_STAGING_GROUPS"
+    GLOBAL_SECURITY_GROUPS="${GLOBAL_STAGING_GROUPS}"
   fi
 fi
 
@@ -507,23 +507,23 @@ SPACES_JSON=$(fetch_all_pages \
   "/v3/spaces?organization_guids=${ORG_GUID}" \
   "Spaces listing for org '${ORG_NAME}'" \
   cf_curl_critical)
-SPACE_COUNT=$(echo "$SPACES_JSON" | jq -r '.pagination.total_results // 0')
+SPACE_COUNT=$(echo "${SPACES_JSON}" | jq -r '.pagination.total_results // 0')
 echo "📦 Found ${SPACE_COUNT} space(s) in org '${ORG_NAME}'"
 
-if [ "$SPACE_COUNT" -eq 0 ]; then
+if [[ "${SPACE_COUNT}" -eq 0 ]]; then
   echo "⚠️ No spaces found in org '${ORG_NAME}'"
   exit 0
 fi
 
-for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
-  SPACE_NAME=$(echo "$SPACES_JSON" | jq -r --arg guid "$SPACE_GUID" '.resources[] | select(.guid==$guid) | .name')
+for SPACE_GUID in $(echo "${SPACES_JSON}" | jq -r '.resources[].guid'); do
+  SPACE_NAME=$(echo "${SPACES_JSON}" | jq -r --arg guid "${SPACE_GUID}" '.resources[] | select(.guid==$guid) | .name')
   echo "➡️  Processing space: ${SPACE_NAME} (${SPACE_GUID})"
   SPACE_SECURITY_GROUPS=$(fetch_all_pages \
     "/v3/security_groups?space_guids=${SPACE_GUID}" \
     "Security groups for space '${SPACE_NAME}'" \
     cf_curl_safe \
     | jq -r '[(.resources // [])[]?.name // empty] | map("space:" + .) | map(select(length>6)) | join(";")')
-  if [ "$SPACE_SECURITY_GROUPS" == "null" ]; then
+  if [[ "${SPACE_SECURITY_GROUPS}" == "null" ]]; then
     SPACE_SECURITY_GROUPS=""
   fi
 
@@ -534,27 +534,27 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
     "/v3/apps?space_guids=${SPACE_GUID}" \
     "Apps listing for space '${SPACE_NAME}'" \
     cf_curl_critical)
-  APP_COUNT=$(echo "$APPS_JSON" | jq -r '.pagination.total_results // 0')
+  APP_COUNT=$(echo "${APPS_JSON}" | jq -r '.pagination.total_results // 0')
 
-  if [ "$APP_COUNT" -eq 0 ]; then
+  if [[ "${APP_COUNT}" -eq 0 ]]; then
     echo "   ⚠️  No apps found in space '${SPACE_NAME}'"
     continue
   fi
   echo "   📱 Found ${APP_COUNT} app(s) in space '${SPACE_NAME}'"
 
-  for APP_GUID in $(echo "$APPS_JSON" | jq -r '.resources[]?.guid'); do
-    APP_NAME=$(echo "$APPS_JSON" | jq -r --arg guid "$APP_GUID" '.resources[] | select(.guid==$guid) | .name')
-    APP_STATE=$(echo "$APPS_JSON" | jq -r --arg guid "$APP_GUID" '.resources[] | select(.guid==$guid) | .state')
+  for APP_GUID in $(echo "${APPS_JSON}" | jq -r '.resources[]?.guid'); do
+    APP_NAME=$(echo "${APPS_JSON}" | jq -r --arg guid "${APP_GUID}" '.resources[] | select(.guid==$guid) | .name')
+    APP_STATE=$(echo "${APPS_JSON}" | jq -r --arg guid "${APP_GUID}" '.resources[] | select(.guid==$guid) | .state')
 
     # Buildpacks
     APP_DETAILS=$(cf_curl_safe "/v3/apps/${APP_GUID}")
 
     # Validate we got real app details, not empty response
-    if ! validate_json_response "$APP_DETAILS" "App details for ${APP_NAME}"; then
+    if ! validate_json_response "${APP_DETAILS}" "App details for ${APP_NAME}"; then
       echo "   ⚠️  WARNING: Failed to retrieve app details for '${APP_NAME}' - buildpack metadata may be incomplete" >&2
     fi
 
-    LIFECYCLE_TYPE=$(echo "$APP_DETAILS" | jq -r '.lifecycle.type // empty')
+    LIFECYCLE_TYPE=$(echo "${APP_DETAILS}" | jq -r '.lifecycle.type // empty')
     BUILDPACKS=""
     BUILDPACK_DETAILS=""
     RUNTIME_VERSION=""
@@ -563,57 +563,57 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
     CURRENT_DROPLET_GUID=$(cf_curl_safe "/v3/apps/${APP_GUID}/relationships/current_droplet" | jq -r '.data.guid // empty')
     DROPLET_JSON=""
 
-    if [ "$LIFECYCLE_TYPE" == "buildpack" ]; then
-      if [ -n "$CURRENT_DROPLET_GUID" ]; then
+    if [[ "${LIFECYCLE_TYPE}" == "buildpack" ]]; then
+      if [[ -n "${CURRENT_DROPLET_GUID}" ]]; then
         DROPLET_JSON=$(cf_curl_safe "/v3/droplets/${CURRENT_DROPLET_GUID}")
 
         # Validate droplet response
-        if ! validate_json_response "$DROPLET_JSON" "Droplet ${CURRENT_DROPLET_GUID} for ${APP_NAME}"; then
+        if ! validate_json_response "${DROPLET_JSON}" "Droplet ${CURRENT_DROPLET_GUID} for ${APP_NAME}"; then
           echo "   ⚠️  WARNING: Failed to retrieve droplet details for '${APP_NAME}' - buildpack versions may be missing" >&2
         fi
 
-        BUILDPACKS=$(echo "$DROPLET_JSON" | jq -r '[.buildpacks[]?.name] // [] | map(select(length>0)) | join(";")')
-        BUILDPACK_DETAILS=$(echo "$DROPLET_JSON" | jq -r '
+        BUILDPACKS=$(echo "${DROPLET_JSON}" | jq -r '[.buildpacks[]?.name] // [] | map(select(length>0)) | join(";")')
+        BUILDPACK_DETAILS=$(echo "${DROPLET_JSON}" | jq -r '
           [.buildpacks[]? | [.name, (.version // ""), (.detect_output // "")]
            | map(select(length>0)) | join(" ")] | map(select(length>0)) | join(";")')
-        RUNTIME_VERSION=$(echo "$DROPLET_JSON" | jq -r '
+        RUNTIME_VERSION=$(echo "${DROPLET_JSON}" | jq -r '
           (.environment_variables // {}) as $env |
           $env.BP_JVM_VERSION // $env.BP_JAVA_VERSION // $env.JAVA_VERSION // empty')
       else
         debug "No current droplet GUID found for app '${APP_NAME}'"
       fi
-    elif [ "$LIFECYCLE_TYPE" == "docker" ]; then
+    elif [[ "${LIFECYCLE_TYPE}" == "docker" ]]; then
       # Extract Docker metadata from droplet
-      if [ -n "$CURRENT_DROPLET_GUID" ]; then
+      if [[ -n "${CURRENT_DROPLET_GUID}" ]]; then
         DROPLET_JSON=$(cf_curl_safe "/v3/droplets/${CURRENT_DROPLET_GUID}")
 
         # Validate droplet response
-        if ! validate_json_response "$DROPLET_JSON" "Droplet ${CURRENT_DROPLET_GUID} for ${APP_NAME}"; then
+        if ! validate_json_response "${DROPLET_JSON}" "Droplet ${CURRENT_DROPLET_GUID} for ${APP_NAME}"; then
           echo "   ⚠️  WARNING: Failed to retrieve Docker droplet details for '${APP_NAME}'" >&2
         else
           # Extract Docker image (full image string, e.g., "nginx:1.21.0" or "registry.io/org/app:tag")
-          DOCKER_IMAGE=$(echo "$DROPLET_JSON" | jq -r '.image // empty')
+          DOCKER_IMAGE=$(echo "${DROPLET_JSON}" | jq -r '.image // empty')
 
-          if [ -n "$DOCKER_IMAGE" ]; then
+          if [[ -n "${DOCKER_IMAGE}" ]]; then
             # Split image into registry and image parts
             # Format: [registry/]repository[:tag|@digest]
             # Examples:
             #   "nginx:1.21.0" → registry="docker.io", image="nginx:1.21.0"
             #   "gcr.io/my-project/app:v1" → registry="gcr.io", image="my-project/app:v1"
 
-            if [[ "$DOCKER_IMAGE" == *"/"* ]]; then
+            if [[ "${DOCKER_IMAGE}" == *"/"* ]]; then
               # Has registry prefix
-              DOCKER_REGISTRY=$(echo "$DOCKER_IMAGE" | cut -d'/' -f1)
+              DOCKER_REGISTRY=$(echo "${DOCKER_IMAGE}" | cut -d'/' -f1)
             else
               # No explicit registry, assume Docker Hub
               DOCKER_REGISTRY="docker.io"
             fi
 
             # Populate buildpack fields with Docker metadata
-            BUILDPACKS="$DOCKER_IMAGE"
-            BUILDPACK_DETAILS="registry:$DOCKER_REGISTRY"
+            BUILDPACKS="${DOCKER_IMAGE}"
+            BUILDPACK_DETAILS="registry:${DOCKER_REGISTRY}"
 
-            debug "Docker app detected: image=$DOCKER_IMAGE, registry=$DOCKER_REGISTRY"
+            debug "Docker app detected: image=${DOCKER_IMAGE}, registry=${DOCKER_REGISTRY}"
           else
             debug "No Docker image found in droplet for '${APP_NAME}'"
           fi
@@ -623,18 +623,18 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
       fi
     else
       # Unknown lifecycle type
-      if [ -n "$LIFECYCLE_TYPE" ]; then
-        debug "Unknown lifecycle type '$LIFECYCLE_TYPE' for app '${APP_NAME}'"
+      if [[ -n "${LIFECYCLE_TYPE}" ]]; then
+        debug "Unknown lifecycle type '${LIFECYCLE_TYPE}' for app '${APP_NAME}'"
       fi
     fi
 
-    if [ -z "$BUILDPACKS" ] || [ "$BUILDPACKS" == "null" ]; then
-      BUILDPACKS=$(echo "$APP_DETAILS" | jq -r '.lifecycle.data.buildpacks // [] | map(select(length>0)) | join(";")')
+    if [[ -z "${BUILDPACKS}" ]] || [[ "${BUILDPACKS}" == "null" ]]; then
+      BUILDPACKS=$(echo "${APP_DETAILS}" | jq -r '.lifecycle.data.buildpacks // [] | map(select(length>0)) | join(";")')
     fi
-    if [ "$BUILDPACK_DETAILS" == "null" ]; then
+    if [[ "${BUILDPACK_DETAILS}" == "null" ]]; then
       BUILDPACK_DETAILS=""
     fi
-    if [ "$RUNTIME_VERSION" == "null" ]; then
+    if [[ "${RUNTIME_VERSION}" == "null" ]]; then
       RUNTIME_VERSION=""
     fi
 
@@ -645,36 +645,36 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
       cf_curl_safe)
 
     # Check if routes response is valid
-    if ! validate_json_response "$ROUTES_JSON" "Routes for ${APP_NAME}"; then
+    if ! validate_json_response "${ROUTES_JSON}" "Routes for ${APP_NAME}"; then
       echo "   ⚠️  WARNING: Failed to retrieve routes for '${APP_NAME}' - route information may be incomplete" >&2
     fi
 
-    ROUTES=$(echo "$ROUTES_JSON" | jq -r '[(.resources // [])[]?.url // empty] | map(select(length>0)) | join(";")')
-    if [ "$ROUTES" == "null" ]; then
+    ROUTES=$(echo "${ROUTES_JSON}" | jq -r '[(.resources // [])[]?.url // empty] | map(select(length>0)) | join(";")')
+    if [[ "${ROUTES}" == "null" ]]; then
       ROUTES=""
     fi
 
     # Debug: distinguish between "no routes" and "routes API failed"
-    ROUTE_COUNT=$(echo "$ROUTES_JSON" | jq -r '.resources | length')
-    if [ "$ROUTE_COUNT" == "0" ] && [ -n "$ROUTES_JSON" ] && [ "$ROUTES_JSON" != "{}" ]; then
+    ROUTE_COUNT=$(echo "${ROUTES_JSON}" | jq -r '.resources | length')
+    if [[ "${ROUTE_COUNT}" == "0" ]] && [[ -n "${ROUTES_JSON}" ]] && [[ "${ROUTES_JSON}" != "{}" ]]; then
       debug "App '${APP_NAME}' has no routes (valid empty)"
     fi
 
     DOMAINS=""
-    DOMAIN_GUIDS=$(echo "$ROUTES_JSON" | jq -r '(.resources // [])[]?.relationships.domain.data.guid | select(length>0)')
-    if [ -n "$DOMAIN_GUIDS" ]; then
+    DOMAIN_GUIDS=$(echo "${ROUTES_JSON}" | jq -r '(.resources // [])[]?.relationships.domain.data.guid | select(length>0)')
+    if [[ -n "${DOMAIN_GUIDS}" ]]; then
       while read -r DOMAIN_GUID; do
-        [ -z "$DOMAIN_GUID" ] && continue
+    [[ -z "${DOMAIN_GUID}" ]] && continue
         DOMAIN_NAME=$(cf_curl_optional "/v3/domains/${DOMAIN_GUID}" \
                       "Domain ${DOMAIN_GUID}" | jq -r '.name // empty')
-        if [ -n "$DOMAIN_NAME" ]; then
-          if [ -n "$DOMAINS" ]; then
+        if [[ -n "${DOMAIN_NAME}" ]]; then
+          if [[ -n "${DOMAINS}" ]]; then
             DOMAINS="${DOMAINS};${DOMAIN_NAME}"
           else
-            DOMAINS="$DOMAIN_NAME"
+            DOMAINS="${DOMAIN_NAME}"
           fi
         fi
-      done < <(printf "%s\n" "$DOMAIN_GUIDS" | sort -u)
+      done < <(printf "%s\n" "${DOMAIN_GUIDS}" | sort -u)
     fi
 
     # Services & bindings
@@ -684,76 +684,76 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
       cf_curl_safe)
 
     # Validate service bindings response
-    if ! validate_json_response "$SERVICE_BINDINGS_JSON" "Service bindings for ${APP_NAME}"; then
+    if ! validate_json_response "${SERVICE_BINDINGS_JSON}" "Service bindings for ${APP_NAME}"; then
       echo "   ⚠️  WARNING: Failed to retrieve service bindings for '${APP_NAME}' - service information may be incomplete" >&2
     fi
 
-    SERVICE_BINDINGS=$(echo "$SERVICE_BINDINGS_JSON" | jq -r '[(.resources // [])[]?.name // empty] | map(select(length>0)) | join(";")')
-    if [ "$SERVICE_BINDINGS" == "null" ]; then
+    SERVICE_BINDINGS=$(echo "${SERVICE_BINDINGS_JSON}" | jq -r '[(.resources // [])[]?.name // empty] | map(select(length>0)) | join(";")')
+    if [[ "${SERVICE_BINDINGS}" == "null" ]]; then
       SERVICE_BINDINGS=""
     fi
     SERVICE_INSTANCES=""
-    SERVICE_INSTANCE_GUIDS=$(echo "$SERVICE_BINDINGS_JSON" | jq -r '(.resources // [])[]?.relationships.service_instance.data.guid | select(length>0)')
-    if [ -n "$SERVICE_INSTANCE_GUIDS" ]; then
+    SERVICE_INSTANCE_GUIDS=$(echo "${SERVICE_BINDINGS_JSON}" | jq -r '(.resources // [])[]?.relationships.service_instance.data.guid | select(length>0)')
+    if [[ -n "${SERVICE_INSTANCE_GUIDS}" ]]; then
       while read -r SERVICE_INSTANCE_GUID; do
-        [ -z "$SERVICE_INSTANCE_GUID" ] && continue
+    [[ -z "${SERVICE_INSTANCE_GUID}" ]] && continue
         SERVICE_INSTANCE_JSON=$(cf_curl_optional \
           "/v3/service_instances/${SERVICE_INSTANCE_GUID}" \
           "Service instance ${SERVICE_INSTANCE_GUID}")
 
         # Validate service instance response
-        if ! validate_json_response "$SERVICE_INSTANCE_JSON" "Service instance ${SERVICE_INSTANCE_GUID}"; then
+        if ! validate_json_response "${SERVICE_INSTANCE_JSON}" "Service instance ${SERVICE_INSTANCE_GUID}"; then
           debug "Failed to retrieve service instance details for ${SERVICE_INSTANCE_GUID}"
           continue
         fi
 
-        SERVICE_INSTANCE_NAME=$(echo "$SERVICE_INSTANCE_JSON" | jq -r '.name // empty')
-        SERVICE_INSTANCE_TYPE=$(echo "$SERVICE_INSTANCE_JSON" | jq -r '.type // empty')
-        SERVICE_PLAN_GUID=$(echo "$SERVICE_INSTANCE_JSON" | jq -r '.relationships.service_plan.data.guid // empty')
+        SERVICE_INSTANCE_NAME=$(echo "${SERVICE_INSTANCE_JSON}" | jq -r '.name // empty')
+        SERVICE_INSTANCE_TYPE=$(echo "${SERVICE_INSTANCE_JSON}" | jq -r '.type // empty')
+        SERVICE_PLAN_GUID=$(echo "${SERVICE_INSTANCE_JSON}" | jq -r '.relationships.service_plan.data.guid // empty')
         SERVICE_PLAN_NAME=""
         SERVICE_OFFERING_NAME=""
-        if [ -n "$SERVICE_PLAN_GUID" ]; then
+        if [[ -n "${SERVICE_PLAN_GUID}" ]]; then
           SERVICE_PLAN_JSON=$(cf_curl_optional "/v3/service_plans/${SERVICE_PLAN_GUID}" \
                             "Service plan ${SERVICE_PLAN_GUID}")
-          SERVICE_PLAN_NAME=$(echo "$SERVICE_PLAN_JSON" | jq -r '.name // empty')
-          SERVICE_OFFERING_GUID=$(echo "$SERVICE_PLAN_JSON" | jq -r '.relationships.service_offering.data.guid // empty')
-          if [ -n "$SERVICE_OFFERING_GUID" ]; then
+          SERVICE_PLAN_NAME=$(echo "${SERVICE_PLAN_JSON}" | jq -r '.name // empty')
+          SERVICE_OFFERING_GUID=$(echo "${SERVICE_PLAN_JSON}" | jq -r '.relationships.service_offering.data.guid // empty')
+          if [[ -n "${SERVICE_OFFERING_GUID}" ]]; then
             SERVICE_OFFERING_NAME=$(cf_curl_optional \
               "/v3/service_offerings/${SERVICE_OFFERING_GUID}" \
               "Service offering" | jq -r '.name // empty')
           fi
         fi
-        ENTRY="$SERVICE_INSTANCE_NAME"
-        if [ -z "$ENTRY" ]; then
-          ENTRY="$SERVICE_INSTANCE_GUID"
+        ENTRY="${SERVICE_INSTANCE_NAME}"
+        if [[ -z "${ENTRY}" ]]; then
+          ENTRY="${SERVICE_INSTANCE_GUID}"
         fi
         DETAILS=""
-        if [ -n "$SERVICE_OFFERING_NAME" ]; then
-          DETAILS="$SERVICE_OFFERING_NAME"
+        if [[ -n "${SERVICE_OFFERING_NAME}" ]]; then
+          DETAILS="${SERVICE_OFFERING_NAME}"
         fi
-        if [ -n "$SERVICE_PLAN_NAME" ]; then
-          if [ -n "$DETAILS" ]; then
+        if [[ -n "${SERVICE_PLAN_NAME}" ]]; then
+          if [[ -n "${DETAILS}" ]]; then
             DETAILS="${DETAILS}/${SERVICE_PLAN_NAME}"
           else
-            DETAILS="$SERVICE_PLAN_NAME"
+            DETAILS="${SERVICE_PLAN_NAME}"
           fi
         fi
-        if [ -n "$SERVICE_INSTANCE_TYPE" ]; then
-          if [ -n "$DETAILS" ]; then
+        if [[ -n "${SERVICE_INSTANCE_TYPE}" ]]; then
+          if [[ -n "${DETAILS}" ]]; then
             DETAILS="${DETAILS} (${SERVICE_INSTANCE_TYPE})"
           else
-            DETAILS="$SERVICE_INSTANCE_TYPE"
+            DETAILS="${SERVICE_INSTANCE_TYPE}"
           fi
         fi
-        if [ -n "$DETAILS" ]; then
+        if [[ -n "${DETAILS}" ]]; then
           ENTRY="${ENTRY} [${DETAILS}]"
         fi
-        if [ -n "$SERVICE_INSTANCES" ]; then
+        if [[ -n "${SERVICE_INSTANCES}" ]]; then
           SERVICE_INSTANCES="${SERVICE_INSTANCES};${ENTRY}"
         else
-          SERVICE_INSTANCES="$ENTRY"
+          SERVICE_INSTANCES="${ENTRY}"
         fi
-      done < <(printf "%s\n" "$SERVICE_INSTANCE_GUIDS" | sort -u)
+      done < <(printf "%s\n" "${SERVICE_INSTANCE_GUIDS}" | sort -u)
     fi
 
     # Environment variables (user-provided) - with sanitization
@@ -761,8 +761,8 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
                "Environment variables for ${APP_NAME}")
 
     # Sanitize environment variables to protect sensitive data
-    ENV_VARS=$(sanitize_environment_variables "$ENV_VARS_JSON")
-    if [ "$ENV_VARS" == "null" ]; then
+    ENV_VARS=$(sanitize_environment_variables "${ENV_VARS_JSON}")
+    if [[ "${ENV_VARS}" == "null" ]]; then
       ENV_VARS=""
     fi
 
@@ -771,15 +771,15 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
       "/v3/processes?app_guids=${APP_GUID}" \
       "Processes for app '${APP_NAME}'" \
       cf_curl_critical)
-    PROC_COUNT=$(echo "$PROCESSES_JSON" | jq -r '.pagination.total_results // 0')
+    PROC_COUNT=$(echo "${PROCESSES_JSON}" | jq -r '.pagination.total_results // 0')
 
-    if [ "$PROC_COUNT" -eq 0 ]; then
+    if [[ "${PROC_COUNT}" -eq 0 ]]; then
       echo "      ⚠️  No processes for app '${APP_NAME}'"
       continue
     fi
 
-    for row in $(echo "$PROCESSES_JSON" | jq -r '.resources[]? | @base64'); do
-      _jq() { echo "$row" | base64 --decode | jq -r "$1"; }
+    for row in $(echo "${PROCESSES_JSON}" | jq -r '.resources[]? | @base64'); do
+      _jq() { echo "${row}" | base64 --decode | jq -r "$1"; }
       TYPE=$(_jq '.type')
       INSTANCES=$(_jq '.instances')
       MEM=$(_jq '.memory_in_mb')
@@ -787,31 +787,31 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
 
       # Aggregate all security groups (space + org + global)
       ALL_SECURITY_GROUPS=""
-      if [ -n "$SPACE_SECURITY_GROUPS" ]; then
-        ALL_SECURITY_GROUPS="$SPACE_SECURITY_GROUPS"
+      if [[ -n "${SPACE_SECURITY_GROUPS}" ]]; then
+        ALL_SECURITY_GROUPS="${SPACE_SECURITY_GROUPS}"
       fi
-      if [ -n "$ORG_SECURITY_GROUPS" ]; then
-        if [ -n "$ALL_SECURITY_GROUPS" ]; then
+      if [[ -n "${ORG_SECURITY_GROUPS}" ]]; then
+        if [[ -n "${ALL_SECURITY_GROUPS}" ]]; then
           ALL_SECURITY_GROUPS="${ALL_SECURITY_GROUPS};${ORG_SECURITY_GROUPS}"
         else
-          ALL_SECURITY_GROUPS="$ORG_SECURITY_GROUPS"
+          ALL_SECURITY_GROUPS="${ORG_SECURITY_GROUPS}"
         fi
       fi
-      if [ -n "$GLOBAL_SECURITY_GROUPS" ]; then
-        if [ -n "$ALL_SECURITY_GROUPS" ]; then
+      if [[ -n "${GLOBAL_SECURITY_GROUPS}" ]]; then
+        if [[ -n "${ALL_SECURITY_GROUPS}" ]]; then
           ALL_SECURITY_GROUPS="${ALL_SECURITY_GROUPS};${GLOBAL_SECURITY_GROUPS}"
         else
-          ALL_SECURITY_GROUPS="$GLOBAL_SECURITY_GROUPS"
+          ALL_SECURITY_GROUPS="${GLOBAL_SECURITY_GROUPS}"
         fi
       fi
 
-      echo "$(escape_csv "$ORG_NAME"),$(escape_csv "$SPACE_NAME"),$(escape_csv "$APP_NAME"),$(escape_csv "$TYPE"),$INSTANCES,$MEM,$DISK,$(escape_csv "$APP_STATE"),$(escape_csv "$BUILDPACKS"),$(escape_csv "$BUILDPACK_DETAILS"),$(escape_csv "$RUNTIME_VERSION"),$(escape_csv "$ROUTES"),$(escape_csv "$DOMAINS"),$(escape_csv "$SERVICE_INSTANCES"),$(escape_csv "$SERVICE_BINDINGS"),$(escape_csv "$ENV_VARS"),$(escape_csv "$ALL_SECURITY_GROUPS")" >> "$OUTFILE"
+      echo "$(escape_csv "${ORG_NAME}"),$(escape_csv "${SPACE_NAME}"),$(escape_csv "${APP_NAME}"),$(escape_csv "${TYPE}"),${INSTANCES},${MEM},${DISK},$(escape_csv "${APP_STATE}"),$(escape_csv "${BUILDPACKS}"),$(escape_csv "${BUILDPACK_DETAILS}"),$(escape_csv "${RUNTIME_VERSION}"),$(escape_csv "${ROUTES}"),$(escape_csv "${DOMAINS}"),$(escape_csv "${SERVICE_INSTANCES}"),$(escape_csv "${SERVICE_BINDINGS}"),$(escape_csv "${ENV_VARS}"),$(escape_csv "${ALL_SECURITY_GROUPS}")" >> "${OUTFILE}"
     done
   done
 done
 
 # Test: validate_json_response function
-if [ "$DEBUG" == "--debug" ]; then
+if [[ "${DEBUG}" == "--debug" ]]; then
   debug "Testing validate_json_response..."
   if validate_json_response '{}' "test"; then
     debug "FAIL: {} should be invalid"
@@ -827,15 +827,15 @@ fi
 
 echo
 echo "✅ Report generated: ${OUTFILE}"
-if [ "$WARNING_COUNT" -gt 0 ]; then
-  echo "⚠️  Data Quality: $WARNING_COUNT warnings encountered (see stderr output)"
+if [[ "${WARNING_COUNT}" -gt 0 ]]; then
+  echo "⚠️  Data Quality: ${WARNING_COUNT} warnings encountered (see stderr output)"
   echo "   Some data may be incomplete due to API failures"
   echo "   Run with --debug flag for detailed warnings"
 else
   echo "✓  Data Quality: No warnings - extraction completed successfully"
 fi
 
-if [ "$DEBUG" == "--debug" ]; then
+if [[ "${DEBUG}" == "--debug" ]]; then
   echo "🔍 CSV preview:"
-  head -n 10 "$OUTFILE"
+  head -n 10 "${OUTFILE}"
 fi
