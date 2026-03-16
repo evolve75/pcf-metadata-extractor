@@ -196,6 +196,61 @@ function cf_curl_safe() {
 }
 
 # ---------------------------------------------------------------------------
+# Pagination helper - fetches all pages from a CF v3 API list endpoint
+# Returns combined JSON with all resources from all pages
+# ---------------------------------------------------------------------------
+function fetch_all_pages() {
+  local initial_url="$1"
+  local description="$2"
+  local curl_function="${3:-cf_curl_critical}"  # Default to critical
+
+  debug "Fetching all pages for: $initial_url"
+
+  # Fetch first page
+  local page_result=$($curl_function "$initial_url" "$description")
+
+  # Extract resources and pagination info
+  local all_resources=$(echo "$page_result" | jq -c '.resources // []')
+  local next_url=$(echo "$page_result" | jq -r '.pagination.next.href // empty')
+  local total_results=$(echo "$page_result" | jq -r '.pagination.total_results // 0')
+  local page_num=1
+
+  # Follow pagination links
+  while [ -n "$next_url" ]; do
+    page_num=$((page_num + 1))
+    debug "Fetching page $page_num: $next_url"
+
+    page_result=$($curl_function "$next_url" "$description (page $page_num)")
+
+    # Append resources to accumulated array
+    local page_resources=$(echo "$page_result" | jq -c '.resources // []')
+    all_resources=$(echo "$all_resources $page_resources" | jq -s 'add')
+
+    # Get next page URL
+    next_url=$(echo "$page_result" | jq -r '.pagination.next.href // empty')
+  done
+
+  local fetched_count=$(echo "$all_resources" | jq 'length')
+  if [ "$fetched_count" != "$total_results" ]; then
+    debug "WARNING: Fetched $fetched_count items but API reported $total_results total"
+  fi
+
+  # Return combined result with updated pagination
+  jq -n \
+    --argjson resources "$all_resources" \
+    --argjson total "$total_results" \
+    --argjson fetched "$fetched_count" \
+    '{
+      pagination: {
+        total_results: $total,
+        total_pages: 1,
+        fetched_results: $fetched
+      },
+      resources: $resources
+    }'
+}
+
+# ---------------------------------------------------------------------------
 # Environment checks
 # ---------------------------------------------------------------------------
 
@@ -228,8 +283,10 @@ echo "✅ Organization: ${ORG_NAME} (${ORG_GUID})"
 # List Spaces in Org
 # ---------------------------------------------------------------------------
 
-SPACES_JSON=$(cf_curl_critical "/v3/spaces?organization_guids=${ORG_GUID}" \
-              "Spaces listing for org '${ORG_NAME}'")
+SPACES_JSON=$(fetch_all_pages \
+  "/v3/spaces?organization_guids=${ORG_GUID}" \
+  "Spaces listing for org '${ORG_NAME}'" \
+  cf_curl_critical)
 SPACE_COUNT=$(echo "$SPACES_JSON" | jq -r '.pagination.total_results // 0')
 echo "📦 Found ${SPACE_COUNT} space(s) in org '${ORG_NAME}'"
 
@@ -241,7 +298,10 @@ fi
 for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
   SPACE_NAME=$(echo "$SPACES_JSON" | jq -r --arg guid "$SPACE_GUID" '.resources[] | select(.guid==$guid) | .name')
   echo "➡️  Processing space: ${SPACE_NAME} (${SPACE_GUID})"
-  SPACE_SECURITY_GROUPS=$(cf_curl_safe "/v3/security_groups?space_guids=${SPACE_GUID}" \
+  SPACE_SECURITY_GROUPS=$(fetch_all_pages \
+    "/v3/security_groups?space_guids=${SPACE_GUID}" \
+    "Security groups for space '${SPACE_NAME}'" \
+    cf_curl_safe \
     | jq -r '[(.resources // [])[]?.name // empty] | map(select(length>0)) | join(";")')
   if [ "$SPACE_SECURITY_GROUPS" == "null" ]; then
     SPACE_SECURITY_GROUPS=""
@@ -250,8 +310,10 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
   # -------------------------------------------------------------------------
   # List Apps in Space
   # -------------------------------------------------------------------------
-  APPS_JSON=$(cf_curl_critical "/v3/apps?space_guids=${SPACE_GUID}" \
-              "Apps listing for space '${SPACE_NAME}'")
+  APPS_JSON=$(fetch_all_pages \
+    "/v3/apps?space_guids=${SPACE_GUID}" \
+    "Apps listing for space '${SPACE_NAME}'" \
+    cf_curl_critical)
   APP_COUNT=$(echo "$APPS_JSON" | jq -r '.pagination.total_results // 0')
 
   if [ "$APP_COUNT" -eq 0 ]; then
@@ -296,7 +358,10 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
     fi
 
     # Routes & domains
-    ROUTES_JSON=$(cf_curl_safe "/v3/routes?app_guids=${APP_GUID}")
+    ROUTES_JSON=$(fetch_all_pages \
+      "/v3/routes?app_guids=${APP_GUID}" \
+      "Routes for app '${APP_NAME}'" \
+      cf_curl_safe)
     ROUTES=$(echo "$ROUTES_JSON" | jq -r '[(.resources // [])[]?.url // empty] | map(select(length>0)) | join(";")')
     if [ "$ROUTES" == "null" ]; then
       ROUTES=""
@@ -319,7 +384,10 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
     fi
 
     # Services & bindings
-    SERVICE_BINDINGS_JSON=$(cf_curl_safe "/v3/service_credential_bindings?app_guids=${APP_GUID}")
+    SERVICE_BINDINGS_JSON=$(fetch_all_pages \
+      "/v3/service_credential_bindings?app_guids=${APP_GUID}" \
+      "Service bindings for app '${APP_NAME}'" \
+      cf_curl_safe)
     SERVICE_BINDINGS=$(echo "$SERVICE_BINDINGS_JSON" | jq -r '[(.resources // [])[]?.name // empty] | map(select(length>0)) | join(";")')
     if [ "$SERVICE_BINDINGS" == "null" ]; then
       SERVICE_BINDINGS=""
@@ -391,8 +459,10 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
     fi
 
     # Processes (memory/disk/instances)
-    PROCESSES_JSON=$(cf_curl_critical "/v3/processes?app_guids=${APP_GUID}" \
-                     "Processes for app '${APP_NAME}'")
+    PROCESSES_JSON=$(fetch_all_pages \
+      "/v3/processes?app_guids=${APP_GUID}" \
+      "Processes for app '${APP_NAME}'" \
+      cf_curl_critical)
     PROC_COUNT=$(echo "$PROCESSES_JSON" | jq -r '.pagination.total_results // 0')
 
     if [ "$PROC_COUNT" -eq 0 ]; then
