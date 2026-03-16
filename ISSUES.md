@@ -178,7 +178,21 @@ The script only extracts security groups at the space level. Cloud Foundry also 
 - Network connectivity issues may arise in target environment
 - Compliance requirements may not be fully captured
 
-**Status:** Open
+**Status:** Fixed
+
+**Resolution:**
+Extended security group extraction to capture all scopes:
+- **Space-level**: Security groups bound to specific spaces (prefix: `space:`)
+- **Organization-level**: Security groups bound to all spaces in org (prefix: `org:`)
+- **Global running**: Applied to all running apps foundation-wide (prefix: `global-running:`)
+- **Global staging**: Applied to all staging apps foundation-wide (prefix: `global-staging:`)
+
+Security Groups CSV field format:
+- Scope-prefixed semicolon-separated list
+- Example: `space:public_networks;org:db_access;global-running:internet`
+- Backward compatible: Single column, no breaking CSV structure changes
+
+Migration planning now has complete visibility into security posture across all scopes. Network connectivity requirements and compliance rules are fully captured for target platform migration.
 
 ---
 
@@ -258,7 +272,7 @@ CSV files now parse correctly in Excel, Python csv module, and database imports.
 | ISSUE-003 | API Call Failures | High | **Fixed** |
 | ISSUE-004 | Docker/Non-Buildpack Apps | Medium | **Fixed** |
 | ISSUE-005 | Base64 Decoding Platform Issues | Medium | Open |
-| ISSUE-006 | Incomplete Security Group Extraction | Low-Medium | Open |
+| ISSUE-006 | Incomplete Security Group Extraction | Low-Medium | **Fixed** |
 | ISSUE-007 | Environment Variable Exposure | High (Security) | **Fixed** |
 | ISSUE-008 | CSV Field Escaping | Medium | **Fixed** |
 
