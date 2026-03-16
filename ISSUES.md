@@ -67,7 +67,16 @@ The `cf_curl_safe` function returns an empty JSON object `{}` when API calls fai
 - No retry mechanism for transient failures
 - Difficult to diagnose partial extraction runs
 
-**Status:** Open
+**Status:** Fixed
+
+**Resolution:**
+Implemented comprehensive error handling system with three-tier approach:
+- `cf_curl_with_retry()`: Core retry logic with exponential backoff (2s → 4s → 8s)
+- `cf_curl_critical()`: For critical calls (org/space/app lookups) - exits on error
+- `cf_curl_optional()`: For optional calls (env vars, domains, services) - warns and continues
+- `classify_error()`: Distinguishes permanent (401/404) vs transient (network/5xx) errors
+
+Updated 9 call sites to use appropriate error handling. Backward compatible - `cf_curl_safe()` still returns {} on error.
 
 ---
 
@@ -181,7 +190,7 @@ CSV field values containing commas, quotes, newlines, or other special character
 |----|-------|----------|--------|
 | ISSUE-001 | API Pagination | High | Open |
 | ISSUE-002 | Empty/Null Data Handling | Medium | Open |
-| ISSUE-003 | API Call Failures | High | Open |
+| ISSUE-003 | API Call Failures | High | **Fixed** |
 | ISSUE-004 | Docker/Non-Buildpack Apps | Medium | Open |
 | ISSUE-005 | Base64 Decoding Platform Issues | Medium | Open |
 | ISSUE-006 | Incomplete Security Group Extraction | Low-Medium | Open |

@@ -33,10 +33,146 @@ function debug() {
   fi
 }
 
+# ---------------------------------------------------------------------------
+# Error classification helper
+# Distinguishes between permanent errors (don't retry) and transient (retry)
+# ---------------------------------------------------------------------------
+function classify_error() {
+  local response="$1"
+  local error_msg="$2"
+  local exit_code="$3"
+
+  # Check JSON for CF API error codes
+  if echo "$response" | jq -e '.errors' >/dev/null 2>&1; then
+    local error_code=$(echo "$response" | jq -r '.errors[0].code // empty')
+    case "$error_code" in
+      10002|10003) echo "auth_error" ;;      # Unauthorized/Forbidden
+      10004|10010) echo "not_found" ;;       # Not found
+      1000|10008)  echo "client_error" ;;    # Bad request/Validation
+      *) echo "server_error" ;;              # Other API errors, retry-eligible
+    esac
+    return
+  fi
+
+  # Check stderr for network/connection errors
+  if echo "$error_msg" | grep -qi "connection refused\|timeout\|network\|DNS"; then
+    echo "network_error"
+  elif echo "$error_msg" | grep -qi "unauthorized\|401\|403"; then
+    echo "auth_error"
+  elif echo "$error_msg" | grep -qi "not found\|404"; then
+    echo "not_found"
+  elif echo "$error_msg" | grep -qi "50[0-9]\|bad gateway\|service unavailable"; then
+    echo "server_error"
+  else
+    echo "server_error"  # Default to retry-eligible for safety
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Core retry function with exponential backoff
+# Returns: JSON on success, __ERROR_PERMANENT__ or __ERROR_TRANSIENT__ on failure
+# ---------------------------------------------------------------------------
+function cf_curl_with_retry() {
+  local endpoint="$1"
+  local max_retries="${2:-3}"
+  local attempt=0
+  local backoff=2
+
+  while [ $attempt -le $max_retries ]; do
+    local tmpfile_out=$(mktemp)
+    local tmpfile_err=$(mktemp)
+    local exit_code=0
+
+    debug "API call attempt $((attempt+1))/$((max_retries+1)): cf curl ${endpoint}"
+    cf curl "${endpoint}" > "$tmpfile_out" 2> "$tmpfile_err" || exit_code=$?
+
+    local response=$(cat "$tmpfile_out")
+    local error_msg=$(cat "$tmpfile_err")
+    rm -f "$tmpfile_out" "$tmpfile_err"
+
+    # Success: valid JSON without errors field
+    if [ $exit_code -eq 0 ] && echo "$response" | jq -e 'has("errors") | not' >/dev/null 2>&1; then
+      echo "$response"
+      return 0
+    fi
+
+    # Classify error type
+    local error_type=$(classify_error "$response" "$error_msg" "$exit_code")
+
+    case "$error_type" in
+      "auth_error"|"not_found"|"client_error")
+        # Permanent errors - don't retry
+        echo "ERROR: Permanent error calling ${endpoint}: ${error_msg}" >&2
+        if [ -n "$response" ] && echo "$response" | jq -e '.errors' >/dev/null 2>&1; then
+          echo "$response" | jq -r '.errors[]? | "  \(.title // .detail // .code)"' >&2
+        fi
+        echo "__ERROR_PERMANENT__"
+        return 2
+        ;;
+      "network_error"|"server_error")
+        # Transient errors - retry with backoff
+        if [ $attempt -lt $max_retries ]; then
+          echo "WARNING: Transient error (attempt $((attempt+1))/$((max_retries+1))): ${error_msg}" >&2
+          sleep $backoff
+          backoff=$((backoff * 2))
+        else
+          echo "ERROR: Max retries exceeded for ${endpoint}" >&2
+          echo "__ERROR_TRANSIENT__"
+          return 1
+        fi
+        ;;
+    esac
+    attempt=$((attempt + 1))
+  done
+
+  echo "__ERROR_TRANSIENT__"
+  return 1
+}
+
+# ---------------------------------------------------------------------------
+# High-level wrapper: Critical call - exits script on error
+# ---------------------------------------------------------------------------
+function cf_curl_critical() {
+  local endpoint="$1"
+  local context="${2:-API call}"
+  local result=$(cf_curl_with_retry "$endpoint" 3)
+
+  if [[ "$result" == "__ERROR_"* ]]; then
+    echo "❌ Critical error: ${context} failed" >&2
+    echo "   Endpoint: ${endpoint}" >&2
+    exit 1
+  fi
+  echo "$result"
+}
+
+# ---------------------------------------------------------------------------
+# High-level wrapper: Optional call - logs warning and continues
+# ---------------------------------------------------------------------------
+function cf_curl_optional() {
+  local endpoint="$1"
+  local context="${2:-Optional data}"
+  local result=$(cf_curl_with_retry "$endpoint" 2)  # Fewer retries for optional
+
+  if [[ "$result" == "__ERROR_"* ]]; then
+    echo "⚠️  Warning: ${context} unavailable (${endpoint})" >&2
+    echo "{}"
+    return 0
+  fi
+  echo "$result"
+}
+
+# ---------------------------------------------------------------------------
+# High-level wrapper: Safe call - backward compatible, returns {} on error
+# ---------------------------------------------------------------------------
 function cf_curl_safe() {
   local endpoint="$1"
-  debug "Calling: cf curl ${endpoint}"
-  cf curl "${endpoint}" 2>/dev/null || echo "{}"
+  local result=$(cf_curl_with_retry "$endpoint" 3)
+
+  if [[ "$result" == "__ERROR_"* ]]; then
+    echo "{}"
+    return 0
+  fi
+  echo "$result"
 }
 
 # ---------------------------------------------------------------------------
@@ -57,7 +193,8 @@ fi
 # ---------------------------------------------------------------------------
 
 debug "Fetching org GUID for ${ORG_NAME}"
-ORG_GUID=$(cf_curl_safe "/v3/organizations?names=${ORG_NAME}" | jq -r '.resources[0].guid // empty')
+ORG_GUID=$(cf_curl_critical "/v3/organizations?names=${ORG_NAME}" \
+           "Organization '${ORG_NAME}' lookup" | jq -r '.resources[0].guid // empty')
 
 if [ -z "$ORG_GUID" ]; then
   echo "❌ Organization '${ORG_NAME}' not found."
@@ -71,7 +208,8 @@ echo "✅ Organization: ${ORG_NAME} (${ORG_GUID})"
 # List Spaces in Org
 # ---------------------------------------------------------------------------
 
-SPACES_JSON=$(cf_curl_safe "/v3/spaces?organization_guids=${ORG_GUID}")
+SPACES_JSON=$(cf_curl_critical "/v3/spaces?organization_guids=${ORG_GUID}" \
+              "Spaces listing for org '${ORG_NAME}'")
 SPACE_COUNT=$(echo "$SPACES_JSON" | jq -r '.pagination.total_results // 0')
 echo "📦 Found ${SPACE_COUNT} space(s) in org '${ORG_NAME}'"
 
@@ -92,7 +230,8 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
   # -------------------------------------------------------------------------
   # List Apps in Space
   # -------------------------------------------------------------------------
-  APPS_JSON=$(cf_curl_safe "/v3/apps?space_guids=${SPACE_GUID}")
+  APPS_JSON=$(cf_curl_critical "/v3/apps?space_guids=${SPACE_GUID}" \
+              "Apps listing for space '${SPACE_NAME}'")
   APP_COUNT=$(echo "$APPS_JSON" | jq -r '.pagination.total_results // 0')
 
   if [ "$APP_COUNT" -eq 0 ]; then
@@ -147,7 +286,8 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
     if [ -n "$DOMAIN_GUIDS" ]; then
       while read -r DOMAIN_GUID; do
         [ -z "$DOMAIN_GUID" ] && continue
-        DOMAIN_NAME=$(cf_curl_safe "/v3/domains/${DOMAIN_GUID}" | jq -r '.name // empty')
+        DOMAIN_NAME=$(cf_curl_optional "/v3/domains/${DOMAIN_GUID}" \
+                      "Domain ${DOMAIN_GUID}" | jq -r '.name // empty')
         if [ -n "$DOMAIN_NAME" ]; then
           if [ -n "$DOMAINS" ]; then
             DOMAINS="${DOMAINS};${DOMAIN_NAME}"
@@ -169,18 +309,23 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
     if [ -n "$SERVICE_INSTANCE_GUIDS" ]; then
       while read -r SERVICE_INSTANCE_GUID; do
         [ -z "$SERVICE_INSTANCE_GUID" ] && continue
-        SERVICE_INSTANCE_JSON=$(cf_curl_safe "/v3/service_instances/${SERVICE_INSTANCE_GUID}")
+        SERVICE_INSTANCE_JSON=$(cf_curl_optional \
+          "/v3/service_instances/${SERVICE_INSTANCE_GUID}" \
+          "Service instance ${SERVICE_INSTANCE_GUID}")
         SERVICE_INSTANCE_NAME=$(echo "$SERVICE_INSTANCE_JSON" | jq -r '.name // empty')
         SERVICE_INSTANCE_TYPE=$(echo "$SERVICE_INSTANCE_JSON" | jq -r '.type // empty')
         SERVICE_PLAN_GUID=$(echo "$SERVICE_INSTANCE_JSON" | jq -r '.relationships.service_plan.data.guid // empty')
         SERVICE_PLAN_NAME=""
         SERVICE_OFFERING_NAME=""
         if [ -n "$SERVICE_PLAN_GUID" ]; then
-          SERVICE_PLAN_JSON=$(cf_curl_safe "/v3/service_plans/${SERVICE_PLAN_GUID}")
+          SERVICE_PLAN_JSON=$(cf_curl_optional "/v3/service_plans/${SERVICE_PLAN_GUID}" \
+                            "Service plan ${SERVICE_PLAN_GUID}")
           SERVICE_PLAN_NAME=$(echo "$SERVICE_PLAN_JSON" | jq -r '.name // empty')
           SERVICE_OFFERING_GUID=$(echo "$SERVICE_PLAN_JSON" | jq -r '.relationships.service_offering.data.guid // empty')
           if [ -n "$SERVICE_OFFERING_GUID" ]; then
-            SERVICE_OFFERING_NAME=$(cf_curl_safe "/v3/service_offerings/${SERVICE_OFFERING_GUID}" | jq -r '.name // empty')
+            SERVICE_OFFERING_NAME=$(cf_curl_optional \
+              "/v3/service_offerings/${SERVICE_OFFERING_GUID}" \
+              "Service offering" | jq -r '.name // empty')
           fi
         fi
         ENTRY="$SERVICE_INSTANCE_NAME"
@@ -217,7 +362,8 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
     fi
 
     # Environment variables (user-provided)
-    ENV_VARS=$(cf_curl_safe "/v3/apps/${APP_GUID}/env" | jq -r '
+    ENV_VARS=$(cf_curl_optional "/v3/apps/${APP_GUID}/env" \
+               "Environment variables for ${APP_NAME}" | jq -r '
       (.environment_variables // {}) | to_entries |
       map("\(.key)=\(.value|tostring)") | join(";")')
     if [ "$ENV_VARS" == "null" ]; then
@@ -225,7 +371,8 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
     fi
 
     # Processes (memory/disk/instances)
-    PROCESSES_JSON=$(cf_curl_safe "/v3/processes?app_guids=${APP_GUID}")
+    PROCESSES_JSON=$(cf_curl_critical "/v3/processes?app_guids=${APP_GUID}" \
+                     "Processes for app '${APP_NAME}'")
     PROC_COUNT=$(echo "$PROCESSES_JSON" | jq -r '.pagination.total_results // 0')
 
     if [ "$PROC_COUNT" -eq 0 ]; then
