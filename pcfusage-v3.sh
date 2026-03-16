@@ -323,6 +323,30 @@ function sanitize_json_recursive() {
 }
 
 # ---------------------------------------------------------------------------
+# Per-variable sanitization - handles both plain strings and JSON values
+# Returns sanitized value suitable for CSV output
+# ---------------------------------------------------------------------------
+function sanitize_env_var() {
+  local key="$1"
+  local value="$2"
+
+  # First check if the key itself is sensitive
+  if redact_sensitive_value "$key"; then
+    echo "<REDACTED>"
+    return 0
+  fi
+
+  # Try to parse value as JSON
+  if echo "$value" | jq -e '.' >/dev/null 2>&1; then
+    # Valid JSON - sanitize recursively
+    sanitize_json_recursive "$value"
+  else
+    # Not JSON - return original value (key already checked above)
+    echo "$value"
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # Environment checks
 # ---------------------------------------------------------------------------
 
