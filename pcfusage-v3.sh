@@ -347,6 +347,47 @@ function sanitize_env_var() {
 }
 
 # ---------------------------------------------------------------------------
+# Top-level coordinator - extracts and sanitizes all environment variables
+# Takes ENV_VARS_JSON from API, returns semicolon-separated key=value pairs
+# ---------------------------------------------------------------------------
+function sanitize_environment_variables() {
+  local env_vars_json="$1"
+
+  # Validate input
+  if ! validate_json_response "$env_vars_json" "Environment variables"; then
+    echo ""
+    return 0
+  fi
+
+  # Extract environment_variables object
+  local env_object=$(echo "$env_vars_json" | jq -r '.environment_variables // {}')
+
+  # If no environment variables, return empty
+  if [ "$env_object" == "{}" ] || [ "$env_object" == "null" ]; then
+    echo ""
+    return 0
+  fi
+
+  # Process each key-value pair
+  local sanitized_vars=""
+  while IFS='=' read -r key value; do
+    [ -z "$key" ] && continue
+
+    # Sanitize the value
+    local sanitized_value=$(sanitize_env_var "$key" "$value")
+
+    # Build result string
+    if [ -n "$sanitized_vars" ]; then
+      sanitized_vars="${sanitized_vars};${key}=${sanitized_value}"
+    else
+      sanitized_vars="${key}=${sanitized_value}"
+    fi
+  done < <(echo "$env_object" | jq -r 'to_entries | map("\(.key)=\(.value | tostring)") | .[]')
+
+  echo "$sanitized_vars"
+}
+
+# ---------------------------------------------------------------------------
 # Environment checks
 # ---------------------------------------------------------------------------
 
