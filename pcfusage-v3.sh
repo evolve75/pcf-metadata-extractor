@@ -251,6 +251,30 @@ function fetch_all_pages() {
 }
 
 # ---------------------------------------------------------------------------
+# JSON validation helper - detects empty API responses vs valid data
+# Returns 0 (success) if JSON is valid and non-empty
+# Returns 1 (failure) if JSON is {} or invalid
+# ---------------------------------------------------------------------------
+function validate_json_response() {
+  local json="$1"
+  local context="${2:-API response}"
+
+  # Check if response is literally "{}" (empty object from cf_curl_safe error)
+  if [ "$json" == "{}" ]; then
+    debug "⚠️  WARNING: Empty API response for ${context}"
+    return 1
+  fi
+
+  # Check if response is valid JSON with content
+  if ! echo "$json" | jq -e 'type' >/dev/null 2>&1; then
+    debug "⚠️  WARNING: Invalid JSON response for ${context}"
+    return 1
+  fi
+
+  return 0
+}
+
+# ---------------------------------------------------------------------------
 # Environment checks
 # ---------------------------------------------------------------------------
 
@@ -480,6 +504,13 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
     done
   done
 done
+
+# Test: validate_json_response function
+if [ "$DEBUG" == "--debug" ]; then
+  debug "Testing validate_json_response..."
+  validate_json_response '{}' "test" && debug "FAIL: {} should be invalid" || debug "PASS: {} detected as invalid"
+  validate_json_response '{"data":"value"}' "test" && debug "PASS: valid JSON accepted" || debug "FAIL: valid JSON rejected"
+fi
 
 echo
 echo "✅ Report generated: ${OUTFILE}"
