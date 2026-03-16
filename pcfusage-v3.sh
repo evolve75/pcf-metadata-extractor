@@ -6,13 +6,88 @@
 #   ./pcfusage-v3.sh <org_name> [--debug]
 # ---------------------------------------------------------------------------
 
+show_help() {
+  cat << 'EOF'
+Cloud Foundry Application Metadata Extractor (v3 API)
+
+USAGE:
+  pcfusage-v3.sh <org_name> [--debug]
+  pcfusage-v3.sh -h|--help
+
+ARGUMENTS:
+  <org_name>    Cloud Foundry organization name to extract metadata from
+
+OPTIONS:
+  --debug       Enable verbose diagnostic output
+  -h, --help    Display this help message
+
+DESCRIPTION:
+  Collects comprehensive Cloud Foundry org, space, app, and process metadata
+  using the CF v3 API. Produces a detailed CSV report for auditing, reporting,
+  and migration analysis (e.g., CF → OpenShift/Kubernetes).
+
+FEATURES:
+  • v3 API support (works with v2 API disabled)
+  • Comprehensive metadata extraction (org, space, app, processes, buildpacks,
+    routes, domains, services, security groups)
+  • Docker support (extracts image and registry info)
+  • Security (sanitizes sensitive environment variables)
+  • Robust error handling (retry logic with exponential backoff)
+  • Automatic pagination (handles large datasets >50 items/page)
+  • RFC 4180 CSV formatting (proper escaping)
+  • Data quality tracking (reports warnings for incomplete data)
+
+OUTPUT:
+  Generates a timestamped CSV file:
+    pcfusage_<org_name>_YYYYMMDDHHMMSS.csv
+
+  CSV columns (17 total):
+    Org, Space, App, Process Type, Instances, Memory(MB), Disk(MB), State,
+    Buildpacks, Buildpack Details, Runtime Version, Routes, Domains,
+    Service Instances, Service Bindings, Env Vars, Security Groups
+
+REQUIREMENTS:
+  • Cloud Foundry CLI (cf) installed
+  • jq installed
+  • Logged into Cloud Foundry (cf login)
+
+EXAMPLES:
+  # Extract metadata for abc-company org
+  ./pcfusage-v3.sh abc-company
+
+  # Extract with debug output
+  ./pcfusage-v3.sh abc-company --debug
+
+  # Show this help message
+  ./pcfusage-v3.sh --help
+
+COMMON USES:
+  • Migration planning (CF → OpenShift/Kubernetes)
+  • Resource auditing (memory, disk, instance usage)
+  • Buildpack analysis (identify versions and upgrade candidates)
+  • Security review (audit security groups and environment variables)
+  • Service mapping (document dependencies and bindings)
+  • Docker adoption tracking
+  • Compliance reporting
+
+For more information, see README.md
+EOF
+  exit 0
+}
+
 set -euo pipefail
+
+# Check for help flag FIRST (before any validation or tool checks)
+if [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
+  show_help
+fi
 
 ORG_NAME="${1:-}"
 DEBUG="${2:-}"
 
 if [[ -z "${ORG_NAME}" ]]; then
   echo "Usage: $0 <org_name> [--debug]"
+  echo "Try '$0 --help' for more information."
   exit 1
 fi
 
