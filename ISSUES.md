@@ -57,7 +57,22 @@ When API responses contain null values or empty strings, the script may silently
 - Difficult to identify which records need re-extraction
 - Reduces confidence in data completeness
 
-**Status:** Open
+**Status:** Fixed
+
+**Resolution:**
+Added comprehensive null/empty data validation system:
+- `validate_json_response()` helper function detects `{}` responses from cf_curl_safe
+- Validation checks added at 6 critical extraction points:
+  - App details (lifecycle type, buildpacks)
+  - Droplet details (buildpack versions, runtime)
+  - Routes and domains
+  - Service bindings and instances
+  - Environment variables
+- Warning messages emitted to stderr when API responses are empty/invalid
+- Data quality summary shows total warning count at completion
+- Debug mode provides detailed context for each validation failure
+
+Users can now distinguish between legitimate empty data (app has no routes) and extraction failures (API call failed), improving confidence in data completeness.
 
 ---
 
@@ -210,7 +225,7 @@ CSV files now parse correctly in Excel, Python csv module, and database imports.
 | ID | Title | Severity | Status |
 |----|-------|----------|--------|
 | ISSUE-001 | API Pagination | High | **Fixed** |
-| ISSUE-002 | Empty/Null Data Handling | Medium | Open |
+| ISSUE-002 | Empty/Null Data Handling | Medium | **Fixed** |
 | ISSUE-003 | API Call Failures | High | **Fixed** |
 | ISSUE-004 | Docker/Non-Buildpack Apps | Medium | Open |
 | ISSUE-005 | Base64 Decoding Platform Issues | Medium | Open |
