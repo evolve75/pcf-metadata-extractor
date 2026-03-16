@@ -1096,6 +1096,39 @@ function extract_docker_metadata() {
 }
 
 # ----------------------------------------------------------------------------
+# Extracts domains from routes JSON response
+# Fetches domain names for all unique domain GUIDs
+#
+# Parameters:
+#   $1 - Routes JSON response from API
+#
+# Returns:
+#   Semicolon-separated list of domain names via echo
+# ----------------------------------------------------------------------------
+function extract_domains_from_routes() {
+  local routes_json="$1"
+
+  local domain_guids
+  domain_guids=$(echo "${routes_json}" | jq -r \
+    '(.resources // [])[]?.relationships.domain.data.guid | select(length>0)')
+
+  local domains=""
+  if [[ -n "${domain_guids}" ]]; then
+    while read -r domain_guid; do
+      [[ -z "${domain_guid}" ]] && continue
+      local domain_name
+      domain_name=$(api_fetch_optional "/v3/domains/${domain_guid}" \
+                    "Domain ${domain_guid}" | jq -r '.name // empty')
+      if [[ -n "${domain_name}" ]]; then
+        domains=$(util_append_to_list "${domains}" "${domain_name}")
+      fi
+    done < <(printf "%s\n" "${domain_guids}" | sort -u)
+  fi
+
+  echo "${domains}"
+}
+
+# ----------------------------------------------------------------------------
 # Extracts routes and domains for an application
 # Sets EXTRACTED_ROUTES and EXTRACTED_DOMAINS
 #
@@ -1141,21 +1174,122 @@ function extract_routes_and_domains() {
   fi
 
   # Extract domains from routes
-  local domain_guids
-  domain_guids=$(echo "${routes_json}" | jq -r \
-    '(.resources // [])[]?.relationships.domain.data.guid | select(length>0)')
+  EXTRACTED_DOMAINS=$(extract_domains_from_routes "${routes_json}")
+}
 
-  if [[ -n "${domain_guids}" ]]; then
-    while read -r domain_guid; do
-      [[ -z "${domain_guid}" ]] && continue
-      local domain_name
-      domain_name=$(api_fetch_optional "/v3/domains/${domain_guid}" \
-                    "Domain ${domain_guid}" | jq -r '.name // empty')
-      if [[ -n "${domain_name}" ]]; then
-        EXTRACTED_DOMAINS=$(util_append_to_list "${EXTRACTED_DOMAINS}" "${domain_name}")
-      fi
-    done < <(printf "%s\n" "${domain_guids}" | sort -u)
+# ----------------------------------------------------------------------------
+# Formats a service instance entry for CSV output
+# Builds display string with optional details in brackets
+#
+# Parameters:
+#   $1 - Service instance name
+#   $2 - Service instance GUID (fallback if name is empty)
+#   $3 - Service offering name (optional)
+#   $4 - Service plan name (optional)
+#   $5 - Service instance type (optional)
+#
+# Returns:
+#   Formatted entry string (e.g., "my-db [postgres/small (managed)]")
+#
+# Examples:
+#   entry=$(format_service_instance_entry "my-db" "guid-123" "postgres" "small" "managed")
+# ----------------------------------------------------------------------------
+function format_service_instance_entry() {
+  local instance_name="$1"
+  local instance_guid="$2"
+  local offering_name="$3"
+  local plan_name="$4"
+  local instance_type="$5"
+
+  # Use name if available, otherwise GUID
+  local entry="${instance_name}"
+  if [[ -z "${entry}" ]]; then
+    entry="${instance_guid}"
   fi
+
+  # Build details string: offering/plan (type)
+  local details=""
+  if [[ -n "${offering_name}" ]]; then
+    details="${offering_name}"
+  fi
+  if [[ -n "${plan_name}" ]]; then
+    details=$(util_append_to_list "${details}" "${plan_name}" "/")
+  fi
+  if [[ -n "${instance_type}" ]]; then
+    if [[ -n "${details}" ]]; then
+      details="${details} (${instance_type})"
+    else
+      details="${instance_type}"
+    fi
+  fi
+
+  # Add details in brackets if present
+  if [[ -n "${details}" ]]; then
+    entry="${entry} [${details}]"
+  fi
+
+  echo "${entry}"
+}
+
+# ----------------------------------------------------------------------------
+# Extracts details for a single service instance
+# Fetches instance, plan, and offering metadata and formats for display
+#
+# Parameters:
+#   $1 - Service instance GUID
+#
+# Returns:
+#   Formatted service instance entry string via echo
+#   Returns empty string if instance cannot be retrieved
+# ----------------------------------------------------------------------------
+function extract_service_instance_details() {
+  local service_instance_guid="$1"
+
+  # Fetch service instance
+  local service_instance_json
+  service_instance_json=$(api_fetch_optional \
+    "/v3/service_instances/${service_instance_guid}" \
+    "Service instance ${service_instance_guid}")
+
+  if ! validate_json_response "${service_instance_json}" \
+       "Service instance ${service_instance_guid}"; then
+    util_debug "Failed to retrieve service instance details for ${service_instance_guid}"
+    return 0
+  fi
+
+  # Extract instance metadata
+  local service_instance_name service_instance_type
+  service_instance_name=$(echo "${service_instance_json}" | jq -r '.name // empty')
+  service_instance_type=$(echo "${service_instance_json}" | jq -r '.type // empty')
+
+  local service_plan_guid
+  service_plan_guid=$(echo "${service_instance_json}" | jq -r \
+    '.relationships.service_plan.data.guid // empty')
+
+  # Fetch plan and offering details if plan exists
+  local service_plan_name="" service_offering_name=""
+  if [[ -n "${service_plan_guid}" ]]; then
+    local service_plan_json
+    service_plan_json=$(api_fetch_optional \
+      "/v3/service_plans/${service_plan_guid}" \
+      "Service plan ${service_plan_guid}")
+    service_plan_name=$(echo "${service_plan_json}" | jq -r '.name // empty')
+
+    local service_offering_guid
+    service_offering_guid=$(echo "${service_plan_json}" | jq -r \
+      '.relationships.service_offering.data.guid // empty')
+
+    if [[ -n "${service_offering_guid}" ]]; then
+      service_offering_name=$(api_fetch_optional \
+        "/v3/service_offerings/${service_offering_guid}" \
+        "Service offering" | jq -r '.name // empty')
+    fi
+  fi
+
+  # Format and return entry
+  format_service_instance_entry "${service_instance_name}" \
+    "${service_instance_guid}" "${service_offering_name}" \
+    "${service_plan_name}" "${service_instance_type}"
 }
 
 # ----------------------------------------------------------------------------
@@ -1206,78 +1340,15 @@ function extract_services() {
     while read -r service_instance_guid; do
       [[ -z "${service_instance_guid}" ]] && continue
 
-      local service_instance_json
-      service_instance_json=$(api_fetch_optional \
-        "/v3/service_instances/${service_instance_guid}" \
-        "Service instance ${service_instance_guid}")
+      # Extract and format service instance details
+      local entry
+      entry=$(extract_service_instance_details "${service_instance_guid}")
 
-      if ! validate_json_response "${service_instance_json}" \
-           "Service instance ${service_instance_guid}"; then
-        util_debug "Failed to retrieve service instance details for " \
-                   "${service_instance_guid}"
-        continue
+      # Append to list if entry was successfully retrieved
+      if [[ -n "${entry}" ]]; then
+        EXTRACTED_SERVICE_INSTANCES=$(util_append_to_list \
+          "${EXTRACTED_SERVICE_INSTANCES}" "${entry}")
       fi
-
-      local service_instance_name service_instance_type
-      service_instance_name=$(echo "${service_instance_json}" | \
-        jq -r '.name // empty')
-      service_instance_type=$(echo "${service_instance_json}" | \
-        jq -r '.type // empty')
-
-      local service_plan_guid
-      service_plan_guid=$(echo "${service_instance_json}" | jq -r \
-        '.relationships.service_plan.data.guid // empty')
-
-      local service_plan_name="" service_offering_name=""
-      if [[ -n "${service_plan_guid}" ]]; then
-        local service_plan_json
-        service_plan_json=$(api_fetch_optional \
-          "/v3/service_plans/${service_plan_guid}" \
-          "Service plan ${service_plan_guid}")
-        service_plan_name=$(echo "${service_plan_json}" | jq -r '.name // empty')
-
-        local service_offering_guid
-        service_offering_guid=$(echo "${service_plan_json}" | jq -r \
-          '.relationships.service_offering.data.guid // empty')
-
-        if [[ -n "${service_offering_guid}" ]]; then
-          service_offering_name=$(api_fetch_optional \
-            "/v3/service_offerings/${service_offering_guid}" \
-            "Service offering" | jq -r '.name // empty')
-        fi
-      fi
-
-      # Build service instance entry
-      local entry="${service_instance_name}"
-      if [[ -z "${entry}" ]]; then
-        entry="${service_instance_guid}"
-      fi
-
-      local details=""
-      if [[ -n "${service_offering_name}" ]]; then
-        details="${service_offering_name}"
-      fi
-      if [[ -n "${service_plan_name}" ]]; then
-        if [[ -n "${details}" ]]; then
-          details="${details}/${service_plan_name}"
-        else
-          details="${service_plan_name}"
-        fi
-      fi
-      if [[ -n "${service_instance_type}" ]]; then
-        if [[ -n "${details}" ]]; then
-          details="${details} (${service_instance_type})"
-        else
-          details="${service_instance_type}"
-        fi
-      fi
-      if [[ -n "${details}" ]]; then
-        entry="${entry} [${details}]"
-      fi
-
-      # Append service instance entry to list
-      EXTRACTED_SERVICE_INSTANCES=$(util_append_to_list \
-        "${EXTRACTED_SERVICE_INSTANCES}" "${entry}")
     done < <(printf "%s\n" "${service_instance_guids}" | sort -u)
   fi
 }

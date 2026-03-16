@@ -440,13 +440,21 @@ buildpacks=$(util_jq_extract "${droplet_json}" \
 **Risk:** Very low (all new utilities are pure functions)
 **Status:** ✅ All validations passing (bash -n, shellcheck)
 
-### Phase 2 (High Impact, Medium Risk)
-1. ✅ Extract `extract_service_instance_details()` from `extract_services()`
-2. ✅ Extract `format_service_instance_entry()` from `extract_services()`
-3. ✅ Extract `extract_domains_from_route_json()` from `extract_routes_and_domains()`
+### Phase 2 (High Impact, Medium Risk) ✅ COMPLETED
+1. ✅ Extract `extract_service_instance_details()` from `extract_services()` (48 lines)
+2. ✅ Extract `format_service_instance_entry()` from `extract_services()` (35 lines)
+3. ✅ Extract `extract_domains_from_routes()` from `extract_routes_and_domains()` (23 lines)
 
-**Estimated Reduction:** ~60-80 lines
-**Risk:** Medium (requires careful testing of service extraction logic)
+**Actual Results:**
+- extract_services(): 111 → 48 lines (**57% reduction!**)
+- extract_routes_and_domains(): 50 → 36 lines (28% reduction)
+- New focused functions created: 3 (106 lines total)
+- Service instance processing now testable in isolation
+- Domain extraction logic reusable if needed elsewhere
+- Clear separation of API fetching vs. data formatting
+- Net change: +71 lines (investment in modularity)
+**Risk:** Medium (changes complex service extraction flow)
+**Status:** ✅ All validations passing (bash -n, shellcheck)
 
 ### Phase 3 (Medium Impact, Low Risk)
 1. Add `util_jq_extract()` utility
