@@ -123,7 +123,21 @@ Applications using Docker images or non-standard lifecycle types don't have buil
 - Missing alternative metadata (Docker image, registry, tags)
 - No distinction between "no buildpack" and "Docker app"
 
-**Status:** Open
+**Status:** Fixed
+
+**Resolution:**
+Added Docker application metadata extraction:
+- Check `lifecycle.type` to distinguish buildpack vs Docker apps
+- For Docker apps, extract image information from droplet metadata
+- Populate existing CSV fields with Docker-specific data:
+  - BUILDPACKS: Full Docker image (e.g., "nginx:1.21.0", "gcr.io/project/app:v1")
+  - BUILDPACK_DETAILS: Docker registry (e.g., "registry:docker.io", "registry:gcr.io")
+  - RUNTIME_VERSION: Empty for Docker apps
+- Backward compatible: CSV structure unchanged, existing parsers continue to work
+- Debug logging identifies Docker apps vs buildpack apps
+- Warning messages if Docker droplet metadata unavailable
+
+Migration planning now has complete visibility into Docker-based applications with registry and image information for migration assessment.
 
 ---
 
@@ -242,7 +256,7 @@ CSV files now parse correctly in Excel, Python csv module, and database imports.
 | ISSUE-001 | API Pagination | High | **Fixed** |
 | ISSUE-002 | Empty/Null Data Handling | Medium | **Fixed** |
 | ISSUE-003 | API Call Failures | High | **Fixed** |
-| ISSUE-004 | Docker/Non-Buildpack Apps | Medium | Open |
+| ISSUE-004 | Docker/Non-Buildpack Apps | Medium | **Fixed** |
 | ISSUE-005 | Base64 Decoding Platform Issues | Medium | Open |
 | ISSUE-006 | Incomplete Security Group Extraction | Low-Medium | Open |
 | ISSUE-007 | Environment Variable Exposure | High (Security) | **Fixed** |

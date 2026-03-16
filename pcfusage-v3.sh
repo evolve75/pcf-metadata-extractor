@@ -481,8 +481,11 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
     BUILDPACK_DETAILS=""
     RUNTIME_VERSION=""
 
+    # Extract droplet GUID (needed for both buildpack and docker apps)
+    CURRENT_DROPLET_GUID=$(cf_curl_safe "/v3/apps/${APP_GUID}/relationships/current_droplet" | jq -r '.data.guid // empty')
+    DROPLET_JSON=""
+
     if [ "$LIFECYCLE_TYPE" == "buildpack" ]; then
-      CURRENT_DROPLET_GUID=$(cf_curl_safe "/v3/apps/${APP_GUID}/relationships/current_droplet" | jq -r '.data.guid // empty')
       if [ -n "$CURRENT_DROPLET_GUID" ]; then
         DROPLET_JSON=$(cf_curl_safe "/v3/droplets/${CURRENT_DROPLET_GUID}")
 
@@ -500,6 +503,50 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
           $env.BP_JVM_VERSION // $env.BP_JAVA_VERSION // $env.JAVA_VERSION // empty')
       else
         debug "No current droplet GUID found for app '${APP_NAME}'"
+      fi
+    elif [ "$LIFECYCLE_TYPE" == "docker" ]; then
+      # Extract Docker metadata from droplet
+      if [ -n "$CURRENT_DROPLET_GUID" ]; then
+        DROPLET_JSON=$(cf_curl_safe "/v3/droplets/${CURRENT_DROPLET_GUID}")
+
+        # Validate droplet response
+        if ! validate_json_response "$DROPLET_JSON" "Droplet ${CURRENT_DROPLET_GUID} for ${APP_NAME}"; then
+          echo "   ⚠️  WARNING: Failed to retrieve Docker droplet details for '${APP_NAME}'" >&2
+        else
+          # Extract Docker image (full image string, e.g., "nginx:1.21.0" or "registry.io/org/app:tag")
+          DOCKER_IMAGE=$(echo "$DROPLET_JSON" | jq -r '.image // empty')
+
+          if [ -n "$DOCKER_IMAGE" ]; then
+            # Split image into registry and image parts
+            # Format: [registry/]repository[:tag|@digest]
+            # Examples:
+            #   "nginx:1.21.0" → registry="docker.io", image="nginx:1.21.0"
+            #   "gcr.io/my-project/app:v1" → registry="gcr.io", image="my-project/app:v1"
+
+            if [[ "$DOCKER_IMAGE" == *"/"* ]]; then
+              # Has registry prefix
+              DOCKER_REGISTRY=$(echo "$DOCKER_IMAGE" | cut -d'/' -f1)
+            else
+              # No explicit registry, assume Docker Hub
+              DOCKER_REGISTRY="docker.io"
+            fi
+
+            # Populate buildpack fields with Docker metadata
+            BUILDPACKS="$DOCKER_IMAGE"
+            BUILDPACK_DETAILS="registry:$DOCKER_REGISTRY"
+
+            debug "Docker app detected: image=$DOCKER_IMAGE, registry=$DOCKER_REGISTRY"
+          else
+            debug "No Docker image found in droplet for '${APP_NAME}'"
+          fi
+        fi
+      else
+        debug "No current droplet GUID found for Docker app '${APP_NAME}'"
+      fi
+    else
+      # Unknown lifecycle type
+      if [ -n "$LIFECYCLE_TYPE" ]; then
+        debug "Unknown lifecycle type '$LIFECYCLE_TYPE' for app '${APP_NAME}'"
       fi
     fi
 
