@@ -67,7 +67,8 @@ function classify_error() {
 
   # Check JSON for CF API error codes
   if echo "$response" | jq -e '.errors' >/dev/null 2>&1; then
-    local error_code=$(echo "$response" | jq -r '.errors[0].code // empty')
+    local error_code
+    error_code=$(echo "$response" | jq -r '.errors[0].code // empty')
     case "$error_code" in
       10002|10003) echo "auth_error" ;;      # Unauthorized/Forbidden
       10004|10010) echo "not_found" ;;       # Not found
@@ -101,16 +102,20 @@ function cf_curl_with_retry() {
   local attempt=0
   local backoff=2
 
-  while [ $attempt -le $max_retries ]; do
-    local tmpfile_out=$(mktemp)
-    local tmpfile_err=$(mktemp)
+  while [ "$attempt" -le "$max_retries" ]; do
+    local tmpfile_out
+    tmpfile_out=$(mktemp)
+    local tmpfile_err
+    tmpfile_err=$(mktemp)
     local exit_code=0
 
     debug "API call attempt $((attempt+1))/$((max_retries+1)): cf curl ${endpoint}"
     cf curl "${endpoint}" > "$tmpfile_out" 2> "$tmpfile_err" || exit_code=$?
 
-    local response=$(cat "$tmpfile_out")
-    local error_msg=$(cat "$tmpfile_err")
+    local response
+    response=$(cat "$tmpfile_out")
+    local error_msg
+    error_msg=$(cat "$tmpfile_err")
     rm -f "$tmpfile_out" "$tmpfile_err"
 
     # Success: valid JSON without errors field
@@ -120,7 +125,8 @@ function cf_curl_with_retry() {
     fi
 
     # Classify error type
-    local error_type=$(classify_error "$response" "$error_msg" "$exit_code")
+    local error_type
+    error_type=$(classify_error "$response" "$error_msg" "$exit_code")
 
     case "$error_type" in
       "auth_error"|"not_found"|"client_error")
@@ -134,7 +140,7 @@ function cf_curl_with_retry() {
         ;;
       "network_error"|"server_error")
         # Transient errors - retry with backoff
-        if [ $attempt -lt $max_retries ]; then
+        if [ "$attempt" -lt "$max_retries" ]; then
           echo "WARNING: Transient error (attempt $((attempt+1))/$((max_retries+1))): ${error_msg}" >&2
           sleep $backoff
           backoff=$((backoff * 2))
@@ -158,7 +164,8 @@ function cf_curl_with_retry() {
 function cf_curl_critical() {
   local endpoint="$1"
   local context="${2:-API call}"
-  local result=$(cf_curl_with_retry "$endpoint" 3)
+  local result
+  result=$(cf_curl_with_retry "$endpoint" 3)
 
   if [[ "$result" == "__ERROR_"* ]]; then
     echo "❌ Critical error: ${context} failed" >&2
@@ -174,7 +181,8 @@ function cf_curl_critical() {
 function cf_curl_optional() {
   local endpoint="$1"
   local context="${2:-Optional data}"
-  local result=$(cf_curl_with_retry "$endpoint" 2)  # Fewer retries for optional
+  local result
+  result=$(cf_curl_with_retry "$endpoint" 2)  # Fewer retries for optional
 
   if [[ "$result" == "__ERROR_"* ]]; then
     echo "⚠️  Warning: ${context} unavailable (${endpoint})" >&2
@@ -189,7 +197,8 @@ function cf_curl_optional() {
 # ---------------------------------------------------------------------------
 function cf_curl_safe() {
   local endpoint="$1"
-  local result=$(cf_curl_with_retry "$endpoint" 3)
+  local result
+  result=$(cf_curl_with_retry "$endpoint" 3)
 
   if [[ "$result" == "__ERROR_"* ]]; then
     echo "{}"
@@ -210,12 +219,16 @@ function fetch_all_pages() {
   debug "Fetching all pages for: $initial_url"
 
   # Fetch first page
-  local page_result=$($curl_function "$initial_url" "$description")
+  local page_result
+  page_result=$($curl_function "$initial_url" "$description")
 
   # Extract resources and pagination info
-  local all_resources=$(echo "$page_result" | jq -c '.resources // []')
-  local next_url=$(echo "$page_result" | jq -r '.pagination.next.href // empty')
-  local total_results=$(echo "$page_result" | jq -r '.pagination.total_results // 0')
+  local all_resources
+  all_resources=$(echo "$page_result" | jq -c '.resources // []')
+  local next_url
+  next_url=$(echo "$page_result" | jq -r '.pagination.next.href // empty')
+  local total_results
+  total_results=$(echo "$page_result" | jq -r '.pagination.total_results // 0')
   local page_num=1
 
   # Follow pagination links
@@ -226,14 +239,16 @@ function fetch_all_pages() {
     page_result=$($curl_function "$next_url" "$description (page $page_num)")
 
     # Append resources to accumulated array
-    local page_resources=$(echo "$page_result" | jq -c '.resources // []')
+    local page_resources
+    page_resources=$(echo "$page_result" | jq -c '.resources // []')
     all_resources=$(echo "$all_resources $page_resources" | jq -s 'add')
 
     # Get next page URL
     next_url=$(echo "$page_result" | jq -r '.pagination.next.href // empty')
   done
 
-  local fetched_count=$(echo "$all_resources" | jq 'length')
+  local fetched_count
+  fetched_count=$(echo "$all_resources" | jq 'length')
   if [ "$fetched_count" != "$total_results" ]; then
     debug "WARNING: Fetched $fetched_count items but API reported $total_results total"
   fi
@@ -285,7 +300,8 @@ function validate_json_response() {
 # ---------------------------------------------------------------------------
 function redact_sensitive_value() {
   local key="$1"
-  local key_upper=$(echo "$key" | tr '[:lower:]' '[:upper:]')
+  local key_upper
+  key_upper=$(echo "$key" | tr '[:lower:]' '[:upper:]')
 
   # Sensitive keyword patterns (case-insensitive substring matching)
   local patterns="PASSWORD PASSWD PWD SECRET PRIVATE KEY APIKEY TOKEN AUTH CREDENTIAL CERT CERTIFICATE DATABASE_URL DB_URL JDBC_URL URI"
@@ -360,7 +376,8 @@ function sanitize_environment_variables() {
   fi
 
   # Extract environment_variables object
-  local env_object=$(echo "$env_vars_json" | jq -r '.environment_variables // {}')
+  local env_object
+  env_object=$(echo "$env_vars_json" | jq -r '.environment_variables // {}')
 
   # If no environment variables, return empty
   if [ "$env_object" == "{}" ] || [ "$env_object" == "null" ]; then
@@ -374,7 +391,8 @@ function sanitize_environment_variables() {
     [ -z "$key" ] && continue
 
     # Sanitize the value
-    local sanitized_value=$(sanitize_env_var "$key" "$value")
+    local sanitized_value
+    sanitized_value=$(sanitize_env_var "$key" "$value")
 
     # Debug log if value was redacted
     if [ "$sanitized_value" == "<REDACTED>" ]; then
@@ -784,8 +802,16 @@ done
 # Test: validate_json_response function
 if [ "$DEBUG" == "--debug" ]; then
   debug "Testing validate_json_response..."
-  validate_json_response '{}' "test" && debug "FAIL: {} should be invalid" || debug "PASS: {} detected as invalid"
-  validate_json_response '{"data":"value"}' "test" && debug "PASS: valid JSON accepted" || debug "FAIL: valid JSON rejected"
+  if validate_json_response '{}' "test"; then
+    debug "FAIL: {} should be invalid"
+  else
+    debug "PASS: {} detected as invalid"
+  fi
+  if validate_json_response '{"data":"value"}' "test"; then
+    debug "PASS: valid JSON accepted"
+  else
+    debug "FAIL: valid JSON rejected"
+  fi
 fi
 
 echo
