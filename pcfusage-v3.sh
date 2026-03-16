@@ -352,6 +352,12 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
 
     # Buildpacks
     APP_DETAILS=$(cf_curl_safe "/v3/apps/${APP_GUID}")
+
+    # Validate we got real app details, not empty response
+    if ! validate_json_response "$APP_DETAILS" "App details for ${APP_NAME}"; then
+      echo "   ⚠️  WARNING: Failed to retrieve app details for '${APP_NAME}' - buildpack metadata may be incomplete" >&2
+    fi
+
     LIFECYCLE_TYPE=$(echo "$APP_DETAILS" | jq -r '.lifecycle.type // empty')
     BUILDPACKS=""
     BUILDPACK_DETAILS=""
