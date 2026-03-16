@@ -456,29 +456,52 @@ buildpacks=$(util_jq_extract "${droplet_json}" \
 **Risk:** Medium (changes complex service extraction flow)
 **Status:** ✅ All validations passing (bash -n, shellcheck)
 
-### Phase 3 (Medium Impact, Low Risk)
-1. Add `util_jq_extract()` utility
-2. Replace repetitive null coalescing patterns
+### Phase 3 (Medium Impact, Low Risk) ✅ COMPLETED
+1. ✅ Add `util_jq_extract()` utility (18 lines)
+2. ✅ Replace null coalescing patterns in 3 locations
 
-**Estimated Reduction:** ~40-50 lines
-**Risk:** Low (utility is simple)
+**Actual Results:**
+- util_jq_extract() added: handles jq "null" → empty string conversion
+- extract_app_metadata(): 91 → 87 lines (4 line reduction)
+- Replaced 3 null-checking if blocks with utility calls
+- Converted 2 additional null checks to compact one-liners
+- Cleaner, more consistent null handling across codebase
+- Net change: +18 lines (new utility) - 4 lines (simplifications) = +14 lines
+**Risk:** Low (simple utility function)
+**Status:** ✅ All validations passing
 
-### Phase 4 (Optional, Medium Impact)
-1. Refactor `cli_parse_args()` with validation/defaults separation
-2. Extract retry decision logic from `api_fetch_with_retry()`
+### Phase 4 (Optional, Medium Impact) ✅ COMPLETED
+1. ✅ Extract `cli_validate_required_args()` from `cli_parse_args()` (9 lines)
+2. ✅ Extract `cli_set_defaults()` from `cli_parse_args()` (11 lines)
+3. ⏭️ Extract retry decision logic from `api_fetch_with_retry()` (SKIPPED - diminishing returns)
 
-**Estimated Reduction:** ~20-30 lines
-**Risk:** Low
+**Actual Results:**
+- cli_parse_args(): 61 → 52 lines (15% reduction)
+- Created 2 focused CLI helper functions (20 lines total)
+- Clearer separation: parsing → validation → defaults
+- Each function has single, testable responsibility
+- Net change: +20 lines (new helpers) - 9 lines (simplification) = +11 lines
+**Risk:** Low (simple extraction)
+**Status:** ✅ All validations passing
 
 ---
 
-## Expected Outcomes
+## Expected Outcomes vs Actual Results
 
-**Total Line Reduction:** 150-200 lines (from ~1,500 to ~1,300-1,350)
-**Longest Function After Refactoring:** ~60 lines (vs current 113)
-**New Reusable Utilities:** 4-5 functions
-**Improved Testability:** 6-8 functions become unit-testable
-**Maintainability:** Significantly improved through DRY principles
+| Metric | Expected | Actual | Notes |
+|--------|----------|--------|-------|
+| **Total lines** | 1,300-1,350 | 1,708 | +208 net (investment in modularity) |
+| **Longest function** | ~60 lines | 87 lines | 23% reduction from 113 |
+| **Reusable utilities** | 4-5 | 9 | Exceeded target! |
+| **Testable functions** | 6-8 | 11 | More granular decomposition |
+| **Functions >75 lines** | N/A | 2 | Down from 4 (50% reduction) |
+| **DRY violations removed** | High | ~8-10 | Append patterns, null checks |
+
+**Key Insight:** Net line increase is acceptable trade-off for dramatically improved:
+- Code reusability (9 utility functions)
+- Testability (11 focused, unit-testable functions)
+- Maintainability (DRY principles applied consistently)
+- Readability (smaller, single-purpose functions)
 
 ---
 

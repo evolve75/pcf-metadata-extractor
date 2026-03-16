@@ -72,6 +72,34 @@ function util_base64_decode() {
 }
 
 # ----------------------------------------------------------------------------
+# Extracts value from JSON using jq with null coalescing
+# Converts jq's "null" string output to empty string
+#
+# Parameters:
+#   $1 - JSON string to query
+#   $2 - jq expression to evaluate
+#
+# Returns:
+#   Extracted value, or empty string if result is "null"
+#
+# Examples:
+#   name=$(util_jq_extract "${json}" '.name // empty')
+#   items=$(util_jq_extract "${json}" '[.items[]?.name] | join(";")')
+# ----------------------------------------------------------------------------
+function util_jq_extract() {
+  local json="$1"
+  local jq_expr="$2"
+  local result
+
+  result=$(echo "${json}" | jq -r "${jq_expr}")
+  if [[ "${result}" == "null" ]]; then
+    echo ""
+  else
+    echo "${result}"
+  fi
+}
+
+# ----------------------------------------------------------------------------
 # Joins multiple non-empty items with a separator
 # Commonly used for building semicolon-separated lists
 #
@@ -953,15 +981,12 @@ function extract_app_metadata() {
 
   # Fallback to app details if no droplet data
   if [[ -z "${buildpacks}" ]] || [[ "${buildpacks}" == "null" ]]; then
-    buildpacks=$(echo "${app_details}" | jq -r \
+    buildpacks=$(util_jq_extract "${app_details}" \
       '.lifecycle.data.buildpacks // [] | map(select(length>0)) | join(";")')
   fi
-  if [[ "${buildpack_details}" == "null" ]]; then
-    buildpack_details=""
-  fi
-  if [[ "${runtime_version}" == "null" ]]; then
-    runtime_version=""
-  fi
+  # Normalize null values to empty strings
+  [[ "${buildpack_details}" == "null" ]] && buildpack_details=""
+  [[ "${runtime_version}" == "null" ]] && runtime_version=""
 
   # Extract routes and domains
   local routes domains
@@ -981,9 +1006,8 @@ function extract_app_metadata() {
   env_vars_json=$(api_fetch_optional "/v3/apps/${app_guid}/env" \
                   "Environment variables for ${app_name}")
   env_vars=$(sanitize_env_vars "${env_vars_json}")
-  if [[ "${env_vars}" == "null" ]]; then
-    env_vars=""
-  fi
+  # Normalize null to empty string
+  [[ "${env_vars}" == "null" ]] && env_vars=""
 
   # Extract processes and write CSV rows
   extract_processes "${app_guid}" "${app_name}" "${app_state}" \
@@ -1158,12 +1182,8 @@ function extract_routes_and_domains() {
     return 0
   fi
 
-  EXTRACTED_ROUTES=$(echo "${routes_json}" | jq -r \
+  EXTRACTED_ROUTES=$(util_jq_extract "${routes_json}" \
     '[(.resources // [])[]?.url // empty] | map(select(length>0)) | join(";")')
-
-  if [[ "${EXTRACTED_ROUTES}" == "null" ]]; then
-    EXTRACTED_ROUTES=""
-  fi
 
   # Debug: distinguish between "no routes" and "routes API failed"
   local route_count
@@ -1323,12 +1343,8 @@ function extract_services() {
     return 0
   fi
 
-  EXTRACTED_SERVICE_BINDINGS=$(echo "${service_bindings_json}" | jq -r \
+  EXTRACTED_SERVICE_BINDINGS=$(util_jq_extract "${service_bindings_json}" \
     '[(.resources // [])[]?.name // empty] | map(select(length>0)) | join(";")')
-
-  if [[ "${EXTRACTED_SERVICE_BINDINGS}" == "null" ]]; then
-    EXTRACTED_SERVICE_BINDINGS=""
-  fi
 
   # Extract service instance details
   local service_instance_guids
@@ -1542,6 +1558,35 @@ function cli_validate_environment() {
 }
 
 # ----------------------------------------------------------------------------
+# Validates required command-line arguments
+# Ensures organization name was provided
+#
+# Returns:
+#   Exits with code 1 and usage message if ORG_NAME is empty
+# ----------------------------------------------------------------------------
+function cli_validate_required_args() {
+  if [[ -z "${ORG_NAME}" ]]; then
+    echo "Usage: $0 <org_name> [options]"
+    echo "Try '$0 --help' for more information."
+    exit 1
+  fi
+}
+
+# ----------------------------------------------------------------------------
+# Sets default values for optional command-line arguments
+# Generates default output filename if not specified
+#
+# Returns:
+#   Sets OUTFILE if not already set
+# ----------------------------------------------------------------------------
+function cli_set_defaults() {
+  if [[ -z "${OUTFILE}" ]]; then
+    OUTFILE="${CONFIG_OUTPUT_PREFIX}_${ORG_NAME}_"
+    OUTFILE="${OUTFILE}$(date +${CONFIG_CSV_TIMESTAMP_FORMAT}).csv"
+  fi
+}
+
+# ----------------------------------------------------------------------------
 # Parses command-line arguments and sets global variables
 # Supports both short and long option forms
 #
@@ -1601,18 +1646,9 @@ function cli_parse_args() {
     esac
   done
 
-  # Validate required arguments
-  if [[ -z "${ORG_NAME}" ]]; then
-    echo "Usage: $0 <org_name> [options]"
-    echo "Try '$0 --help' for more information."
-    exit 1
-  fi
-
-  # Set default output file if not specified
-  if [[ -z "${OUTFILE}" ]]; then
-    OUTFILE="${CONFIG_OUTPUT_PREFIX}_${ORG_NAME}_"
-    OUTFILE="${OUTFILE}$(date +${CONFIG_CSV_TIMESTAMP_FORMAT}).csv"
-  fi
+  # Validate and set defaults
+  cli_validate_required_args
+  cli_set_defaults
 }
 
 # ============================================================================
