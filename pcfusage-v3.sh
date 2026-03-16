@@ -400,10 +400,23 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
       "/v3/routes?app_guids=${APP_GUID}" \
       "Routes for app '${APP_NAME}'" \
       cf_curl_safe)
+
+    # Check if routes response is valid
+    if ! validate_json_response "$ROUTES_JSON" "Routes for ${APP_NAME}"; then
+      echo "   ⚠️  WARNING: Failed to retrieve routes for '${APP_NAME}' - route information may be incomplete" >&2
+    fi
+
     ROUTES=$(echo "$ROUTES_JSON" | jq -r '[(.resources // [])[]?.url // empty] | map(select(length>0)) | join(";")')
     if [ "$ROUTES" == "null" ]; then
       ROUTES=""
     fi
+
+    # Debug: distinguish between "no routes" and "routes API failed"
+    ROUTE_COUNT=$(echo "$ROUTES_JSON" | jq -r '.resources | length')
+    if [ "$ROUTE_COUNT" == "0" ] && [ -n "$ROUTES_JSON" ] && [ "$ROUTES_JSON" != "{}" ]; then
+      debug "App '${APP_NAME}' has no routes (valid empty)"
+    fi
+
     DOMAINS=""
     DOMAIN_GUIDS=$(echo "$ROUTES_JSON" | jq -r '(.resources // [])[]?.relationships.domain.data.guid | select(length>0)')
     if [ -n "$DOMAIN_GUIDS" ]; then
