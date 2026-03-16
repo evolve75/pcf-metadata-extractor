@@ -180,7 +180,17 @@ CSV field values containing commas, quotes, newlines, or other special character
 - Data import into databases fails
 - Manual data cleanup required before use
 
-**Status:** Open
+**Status:** Fixed
+
+**Resolution:**
+Added `escape_csv()` function implementing RFC 4180 CSV escaping:
+- Detects fields containing commas, quotes, newlines, or carriage returns
+- Escapes internal quotes by doubling them (`"` → `""`)
+- Encloses affected fields in double quotes
+- Applied to all 14 string/text fields in CSV output
+- Numeric fields (INSTANCES, MEM, DISK) not escaped for performance
+
+CSV files now parse correctly in Excel, Python csv module, and database imports.
 
 ---
 
@@ -195,7 +205,7 @@ CSV field values containing commas, quotes, newlines, or other special character
 | ISSUE-005 | Base64 Decoding Platform Issues | Medium | Open |
 | ISSUE-006 | Incomplete Security Group Extraction | Low-Medium | Open |
 | ISSUE-007 | Environment Variable Exposure | High (Security) | Open |
-| ISSUE-008 | CSV Field Escaping | Medium | Open |
+| ISSUE-008 | CSV Field Escaping | Medium | **Fixed** |
 
 ---
 

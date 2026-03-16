@@ -34,6 +34,26 @@ function debug() {
 }
 
 # ---------------------------------------------------------------------------
+# CSV field escaping per RFC 4180
+# Encloses field in quotes if it contains: comma, quote, newline
+# Escapes internal quotes by doubling them
+# ---------------------------------------------------------------------------
+function escape_csv() {
+  local field="$1"
+
+  # Check if field contains special characters
+  if [[ "$field" =~ [,\"$'\n'$'\r'] ]]; then
+    # Escape quotes by doubling them
+    field="${field//\"/\"\"}"
+    # Enclose in quotes
+    echo "\"$field\""
+  else
+    # No special characters, return as-is
+    echo "$field"
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # Error classification helper
 # Distinguishes between permanent errors (don't retry) and transient (retry)
 # ---------------------------------------------------------------------------
@@ -386,7 +406,7 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
       INSTANCES=$(_jq '.instances')
       MEM=$(_jq '.memory_in_mb')
       DISK=$(_jq '.disk_in_mb')
-      echo "${ORG_NAME},${SPACE_NAME},${APP_NAME},${TYPE},${INSTANCES},${MEM},${DISK},${APP_STATE},${BUILDPACKS},${BUILDPACK_DETAILS},${RUNTIME_VERSION},${ROUTES},${DOMAINS},${SERVICE_INSTANCES},${SERVICE_BINDINGS},${ENV_VARS},${SPACE_SECURITY_GROUPS}" >> "$OUTFILE"
+      echo "$(escape_csv "$ORG_NAME"),$(escape_csv "$SPACE_NAME"),$(escape_csv "$APP_NAME"),$(escape_csv "$TYPE"),$INSTANCES,$MEM,$DISK,$(escape_csv "$APP_STATE"),$(escape_csv "$BUILDPACKS"),$(escape_csv "$BUILDPACK_DETAILS"),$(escape_csv "$RUNTIME_VERSION"),$(escape_csv "$ROUTES"),$(escape_csv "$DOMAINS"),$(escape_csv "$SERVICE_INSTANCES"),$(escape_csv "$SERVICE_BINDINGS"),$(escape_csv "$ENV_VARS"),$(escape_csv "$SPACE_SECURITY_GROUPS")" >> "$OUTFILE"
     done
   done
 done
