@@ -300,6 +300,29 @@ function redact_sensitive_value() {
 }
 
 # ---------------------------------------------------------------------------
+# Recursive JSON sanitization - walks JSON structure and redacts sensitive fields
+# Uses jq walk() to traverse all nodes and replace sensitive values
+# ---------------------------------------------------------------------------
+function sanitize_json_recursive() {
+  local json="$1"
+
+  # Use jq walk to recursively process all object fields
+  echo "$json" | jq 'walk(
+    if type == "object" then
+      to_entries | map(
+        if (.key | ascii_upcase | test("PASSWORD|PASSWD|PWD|SECRET|PRIVATE|KEY|APIKEY|TOKEN|AUTH|CREDENTIAL|CERT|CERTIFICATE|DATABASE_URL|DB_URL|JDBC_URL|URI")) then
+          .value = "<REDACTED>"
+        else
+          .
+        end
+      ) | from_entries
+    else
+      .
+    end
+  )'
+}
+
+# ---------------------------------------------------------------------------
 # Environment checks
 # ---------------------------------------------------------------------------
 
