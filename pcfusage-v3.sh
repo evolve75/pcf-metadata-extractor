@@ -150,6 +150,17 @@ function cf_curl_with_retry() {
           return 1
         fi
         ;;
+      *)
+        # Unexpected error type - treat as transient for safety
+        echo "WARNING: Unexpected error type '$error_type' - treating as transient" >&2
+        if [ "$attempt" -lt "$max_retries" ]; then
+          sleep $backoff
+          backoff=$((backoff * 2))
+        else
+          echo "__ERROR_TRANSIENT__"
+          return 1
+        fi
+        ;;
     esac
     attempt=$((attempt + 1))
   done
