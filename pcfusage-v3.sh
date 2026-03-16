@@ -23,6 +23,9 @@ fi
 OUTFILE="pcfusage_${ORG_NAME}_$(date +%Y%m%d%H%M%S).csv"
 echo "Org,Space,App,Process Type,Instances,Memory(MB),Disk(MB),State,Buildpacks,Buildpack Details,Runtime Version,Routes,Domains,Service Instances,Service Bindings,Env Vars,Security Groups" > "$OUTFILE"
 
+# Data quality tracking
+WARNING_COUNT=0
+
 # ---------------------------------------------------------------------------
 # Helper functions
 # ---------------------------------------------------------------------------
@@ -262,12 +265,14 @@ function validate_json_response() {
   # Check if response is literally "{}" (empty object from cf_curl_safe error)
   if [ "$json" == "{}" ]; then
     debug "⚠️  WARNING: Empty API response for ${context}"
+    WARNING_COUNT=$((WARNING_COUNT + 1))
     return 1
   fi
 
   # Check if response is valid JSON with content
   if ! echo "$json" | jq -e 'type' >/dev/null 2>&1; then
     debug "⚠️  WARNING: Invalid JSON response for ${context}"
+    WARNING_COUNT=$((WARNING_COUNT + 1))
     return 1
   fi
 
@@ -562,6 +567,14 @@ fi
 
 echo
 echo "✅ Report generated: ${OUTFILE}"
+if [ "$WARNING_COUNT" -gt 0 ]; then
+  echo "⚠️  Data Quality: $WARNING_COUNT warnings encountered (see stderr output)"
+  echo "   Some data may be incomplete due to API failures"
+  echo "   Run with --debug flag for detailed warnings"
+else
+  echo "✓  Data Quality: No warnings - extraction completed successfully"
+fi
+
 if [ "$DEBUG" == "--debug" ]; then
   echo "🔍 CSV preview:"
   head -n 10 "$OUTFILE"
