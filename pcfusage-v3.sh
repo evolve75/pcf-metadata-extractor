@@ -376,6 +376,11 @@ function sanitize_environment_variables() {
     # Sanitize the value
     local sanitized_value=$(sanitize_env_var "$key" "$value")
 
+    # Debug log if value was redacted
+    if [ "$sanitized_value" == "<REDACTED>" ]; then
+      debug "Redacted sensitive environment variable: ${key}"
+    fi
+
     # Build result string
     if [ -n "$sanitized_vars" ]; then
       sanitized_vars="${sanitized_vars};${key}=${sanitized_value}"
