@@ -280,6 +280,26 @@ function validate_json_response() {
 }
 
 # ---------------------------------------------------------------------------
+# Pattern detection - determines if a key name is sensitive
+# Returns 0 (true) if sensitive, 1 (false) if safe
+# ---------------------------------------------------------------------------
+function redact_sensitive_value() {
+  local key="$1"
+  local key_upper=$(echo "$key" | tr '[:lower:]' '[:upper:]')
+
+  # Sensitive keyword patterns (case-insensitive substring matching)
+  local patterns="PASSWORD PASSWD PWD SECRET PRIVATE KEY APIKEY TOKEN AUTH CREDENTIAL CERT CERTIFICATE DATABASE_URL DB_URL JDBC_URL URI"
+
+  for pattern in $patterns; do
+    if [[ "$key_upper" == *"$pattern"* ]]; then
+      return 0  # Sensitive
+    fi
+  done
+
+  return 1  # Safe
+}
+
+# ---------------------------------------------------------------------------
 # Environment checks
 # ---------------------------------------------------------------------------
 
