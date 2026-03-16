@@ -422,6 +422,55 @@ fi
 echo "✅ Organization: ${ORG_NAME} (${ORG_GUID})"
 
 # ---------------------------------------------------------------------------
+# Extract Organization-Level Security Groups
+# ---------------------------------------------------------------------------
+
+debug "Fetching org-level security groups for ${ORG_NAME}"
+ORG_SECURITY_GROUPS=$(fetch_all_pages \
+  "/v3/security_groups?organization_guids=${ORG_GUID}" \
+  "Org-level security groups for '${ORG_NAME}'" \
+  cf_curl_safe \
+  | jq -r '[(.resources // [])[]?.name // empty] | map("org:" + .) | map(select(length>4)) | join(";")')
+
+if [ "$ORG_SECURITY_GROUPS" == "null" ] || [ -z "$ORG_SECURITY_GROUPS" ]; then
+  ORG_SECURITY_GROUPS=""
+fi
+debug "Org security groups: ${ORG_SECURITY_GROUPS}"
+
+# ---------------------------------------------------------------------------
+# Extract Global Security Groups
+# ---------------------------------------------------------------------------
+
+debug "Fetching global security groups"
+
+GLOBAL_RUNNING_GROUPS=$(fetch_all_pages \
+  "/v3/security_groups?globally_enabled_running=true" \
+  "Global running security groups" \
+  cf_curl_safe \
+  | jq -r '[(.resources // [])[]?.name // empty] | map("global-running:" + .) | map(select(length>16)) | join(";")')
+
+GLOBAL_STAGING_GROUPS=$(fetch_all_pages \
+  "/v3/security_groups?globally_enabled_staging=true" \
+  "Global staging security groups" \
+  cf_curl_safe \
+  | jq -r '[(.resources // [])[]?.name // empty] | map("global-staging:" + .) | map(select(length>16)) | join(";")')
+
+# Combine global groups
+GLOBAL_SECURITY_GROUPS=""
+if [ -n "$GLOBAL_RUNNING_GROUPS" ] && [ "$GLOBAL_RUNNING_GROUPS" != "null" ]; then
+  GLOBAL_SECURITY_GROUPS="$GLOBAL_RUNNING_GROUPS"
+fi
+if [ -n "$GLOBAL_STAGING_GROUPS" ] && [ "$GLOBAL_STAGING_GROUPS" != "null" ]; then
+  if [ -n "$GLOBAL_SECURITY_GROUPS" ]; then
+    GLOBAL_SECURITY_GROUPS="${GLOBAL_SECURITY_GROUPS};${GLOBAL_STAGING_GROUPS}"
+  else
+    GLOBAL_SECURITY_GROUPS="$GLOBAL_STAGING_GROUPS"
+  fi
+fi
+
+debug "Global security groups: ${GLOBAL_SECURITY_GROUPS}"
+
+# ---------------------------------------------------------------------------
 # List Spaces in Org
 # ---------------------------------------------------------------------------
 
@@ -444,7 +493,7 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
     "/v3/security_groups?space_guids=${SPACE_GUID}" \
     "Security groups for space '${SPACE_NAME}'" \
     cf_curl_safe \
-    | jq -r '[(.resources // [])[]?.name // empty] | map(select(length>0)) | join(";")')
+    | jq -r '[(.resources // [])[]?.name // empty] | map("space:" + .) | map(select(length>6)) | join(";")')
   if [ "$SPACE_SECURITY_GROUPS" == "null" ]; then
     SPACE_SECURITY_GROUPS=""
   fi
@@ -706,7 +755,28 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
       INSTANCES=$(_jq '.instances')
       MEM=$(_jq '.memory_in_mb')
       DISK=$(_jq '.disk_in_mb')
-      echo "$(escape_csv "$ORG_NAME"),$(escape_csv "$SPACE_NAME"),$(escape_csv "$APP_NAME"),$(escape_csv "$TYPE"),$INSTANCES,$MEM,$DISK,$(escape_csv "$APP_STATE"),$(escape_csv "$BUILDPACKS"),$(escape_csv "$BUILDPACK_DETAILS"),$(escape_csv "$RUNTIME_VERSION"),$(escape_csv "$ROUTES"),$(escape_csv "$DOMAINS"),$(escape_csv "$SERVICE_INSTANCES"),$(escape_csv "$SERVICE_BINDINGS"),$(escape_csv "$ENV_VARS"),$(escape_csv "$SPACE_SECURITY_GROUPS")" >> "$OUTFILE"
+
+      # Aggregate all security groups (space + org + global)
+      ALL_SECURITY_GROUPS=""
+      if [ -n "$SPACE_SECURITY_GROUPS" ]; then
+        ALL_SECURITY_GROUPS="$SPACE_SECURITY_GROUPS"
+      fi
+      if [ -n "$ORG_SECURITY_GROUPS" ]; then
+        if [ -n "$ALL_SECURITY_GROUPS" ]; then
+          ALL_SECURITY_GROUPS="${ALL_SECURITY_GROUPS};${ORG_SECURITY_GROUPS}"
+        else
+          ALL_SECURITY_GROUPS="$ORG_SECURITY_GROUPS"
+        fi
+      fi
+      if [ -n "$GLOBAL_SECURITY_GROUPS" ]; then
+        if [ -n "$ALL_SECURITY_GROUPS" ]; then
+          ALL_SECURITY_GROUPS="${ALL_SECURITY_GROUPS};${GLOBAL_SECURITY_GROUPS}"
+        else
+          ALL_SECURITY_GROUPS="$GLOBAL_SECURITY_GROUPS"
+        fi
+      fi
+
+      echo "$(escape_csv "$ORG_NAME"),$(escape_csv "$SPACE_NAME"),$(escape_csv "$APP_NAME"),$(escape_csv "$TYPE"),$INSTANCES,$MEM,$DISK,$(escape_csv "$APP_STATE"),$(escape_csv "$BUILDPACKS"),$(escape_csv "$BUILDPACK_DETAILS"),$(escape_csv "$RUNTIME_VERSION"),$(escape_csv "$ROUTES"),$(escape_csv "$DOMAINS"),$(escape_csv "$SERVICE_INSTANCES"),$(escape_csv "$SERVICE_BINDINGS"),$(escape_csv "$ENV_VARS"),$(escape_csv "$ALL_SECURITY_GROUPS")" >> "$OUTFILE"
     done
   done
 done
