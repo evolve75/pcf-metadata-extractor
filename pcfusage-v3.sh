@@ -514,12 +514,20 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
     fi
 
     # Environment variables (user-provided)
-    ENV_VARS=$(cf_curl_optional "/v3/apps/${APP_GUID}/env" \
-               "Environment variables for ${APP_NAME}" | jq -r '
-      (.environment_variables // {}) | to_entries |
-      map("\(.key)=\(.value|tostring)") | join(";")')
-    if [ "$ENV_VARS" == "null" ]; then
+    ENV_VARS_JSON=$(cf_curl_optional "/v3/apps/${APP_GUID}/env" \
+               "Environment variables for ${APP_NAME}")
+
+    # Validate env vars response
+    if ! validate_json_response "$ENV_VARS_JSON" "Environment variables for ${APP_NAME}"; then
+      debug "Failed to retrieve environment variables for '${APP_NAME}'"
       ENV_VARS=""
+    else
+      ENV_VARS=$(echo "$ENV_VARS_JSON" | jq -r '
+        (.environment_variables // {}) | to_entries |
+        map("\(.key)=\(.value|tostring)") | join(";")')
+      if [ "$ENV_VARS" == "null" ]; then
+        ENV_VARS=""
+      fi
     fi
 
     # Processes (memory/disk/instances)
