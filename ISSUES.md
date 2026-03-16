@@ -185,7 +185,22 @@ The script extracts all environment variables (including system-provided and use
 - Potential violation of security policies and compliance requirements
 - Risk of credential exposure to unauthorized users
 
-**Status:** Open
+**Status:** Fixed
+
+**Resolution:**
+Added comprehensive environment variable sanitization system:
+- Pattern-based detection identifies sensitive variable names (PASSWORD, SECRET, KEY, TOKEN, etc.)
+- Recursive JSON parsing sanitizes nested structures like VCAP_SERVICES
+- Selective redaction: safe values preserved, sensitive values replaced with `<REDACTED>`
+- Four-tier sanitization architecture:
+  - `redact_sensitive_value()` - pattern matching (case-insensitive substring)
+  - `sanitize_json_recursive()` - deep JSON traversal with jq walk()
+  - `sanitize_env_var()` - per-variable handler with JSON detection
+  - `sanitize_environment_variables()` - top-level coordinator
+- Debug logging shows which variables were redacted
+- Handles edge cases: invalid JSON, null values, empty objects
+
+CSV output now protects credentials while preserving useful configuration metadata for migration planning. VCAP_SERVICES shows service structure without exposing passwords/URIs.
 
 ---
 
@@ -230,7 +245,7 @@ CSV files now parse correctly in Excel, Python csv module, and database imports.
 | ISSUE-004 | Docker/Non-Buildpack Apps | Medium | Open |
 | ISSUE-005 | Base64 Decoding Platform Issues | Medium | Open |
 | ISSUE-006 | Incomplete Security Group Extraction | Low-Medium | Open |
-| ISSUE-007 | Environment Variable Exposure | High (Security) | Open |
+| ISSUE-007 | Environment Variable Exposure | High (Security) | **Fixed** |
 | ISSUE-008 | CSV Field Escaping | Medium | **Fixed** |
 
 ---
