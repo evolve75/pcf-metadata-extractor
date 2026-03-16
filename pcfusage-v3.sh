@@ -367,6 +367,12 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
       CURRENT_DROPLET_GUID=$(cf_curl_safe "/v3/apps/${APP_GUID}/relationships/current_droplet" | jq -r '.data.guid // empty')
       if [ -n "$CURRENT_DROPLET_GUID" ]; then
         DROPLET_JSON=$(cf_curl_safe "/v3/droplets/${CURRENT_DROPLET_GUID}")
+
+        # Validate droplet response
+        if ! validate_json_response "$DROPLET_JSON" "Droplet ${CURRENT_DROPLET_GUID} for ${APP_NAME}"; then
+          echo "   ⚠️  WARNING: Failed to retrieve droplet details for '${APP_NAME}' - buildpack versions may be missing" >&2
+        fi
+
         BUILDPACKS=$(echo "$DROPLET_JSON" | jq -r '[.buildpacks[]?.name] // [] | map(select(length>0)) | join(";")')
         BUILDPACK_DETAILS=$(echo "$DROPLET_JSON" | jq -r '
           [.buildpacks[]? | [.name, (.version // ""), (.detect_output // "")]
@@ -374,6 +380,8 @@ for SPACE_GUID in $(echo "$SPACES_JSON" | jq -r '.resources[].guid'); do
         RUNTIME_VERSION=$(echo "$DROPLET_JSON" | jq -r '
           (.environment_variables // {}) as $env |
           $env.BP_JVM_VERSION // $env.BP_JAVA_VERSION // $env.JAVA_VERSION // empty')
+      else
+        debug "No current droplet GUID found for app '${APP_NAME}'"
       fi
     fi
 
