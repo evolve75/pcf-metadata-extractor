@@ -52,32 +52,38 @@ chmod +x extract-pcf-inventory.sh
 ```
 
 ## Output
+
 Generates a timestamped CSV file such as:
 ```
 pcfusage_abc-company_20260316143022.csv
 ```
 
 ### CSV Columns
+
 The report includes the following columns:
-- **Org** - Organization name
-- **Space** - Space name
-- **App** - Application name
-- **Process Type** - Process type (web, worker, etc.)
-- **Instances** - Number of instances
-- **Memory(MB)** - Memory allocation in MB
-- **Disk(MB)** - Disk allocation in MB
-- **State** - Application state (STARTED, STOPPED)
-- **Buildpacks** - Buildpack names or Docker image
-- **Buildpack Details** - Buildpack versions or Docker registry
-- **Runtime Version** - Runtime version (Java, Node.js, etc.)
-- **Routes** - Application routes (URLs)
-- **Domains** - Associated domains
-- **Service Instances** - Bound service instances with plan details
-- **Service Bindings** - Service binding names
-- **Env Vars** - Environment variables (sensitive values redacted)
-- **Security Groups** - Space, org, and global security groups
+
+| Column | Description |
+|--------|-------------|
+| **Org** | Organization name |
+| **Space** | Space name |
+| **App** | Application name |
+| **Process Type** | Process type (web, worker, etc.) |
+| **Instances** | Number of instances |
+| **Memory(MB)** | Memory allocation in MB |
+| **Disk(MB)** | Disk allocation in MB |
+| **State** | Application state (STARTED, STOPPED) |
+| **Buildpacks** | Buildpack names or Docker image |
+| **Buildpack Details** | Buildpack versions or Docker registry |
+| **Runtime Version** | Runtime version (Java, Node.js, etc.) |
+| **Routes** | Application routes (URLs) |
+| **Domains** | Associated domains |
+| **Service Instances** | Bound service instances with plan details |
+| **Service Bindings** | Service binding names |
+| **Env Vars** | Environment variables (sensitive values redacted) |
+| **Security Groups** | Space, org, and global security groups |
 
 ### Sample Output
+
 ```csv
 Org,Space,App,Process Type,Instances,Memory(MB),Disk(MB),State,Buildpacks,Buildpack Details,Runtime Version,Routes,Domains,Service Instances,Service Bindings,Env Vars,Security Groups
 abc-company,production,api-service,web,3,1024,2048,STARTED,java_buildpack,java_buildpack 4.45,11,api.example.com,example.com,mysql [cleardb/spark (managed)],mysql-binding,DATABASE_URL=<REDACTED>,space:app-sg;global-running:public_networks
