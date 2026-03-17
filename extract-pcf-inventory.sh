@@ -11,7 +11,8 @@ set -euo pipefail
 # ============================================================================
 
 # Script Metadata
-readonly SCRIPT_NAME="$(basename "$0")"
+SCRIPT_NAME="$(basename "$0")"
+readonly SCRIPT_NAME
 
 # API Configuration
 readonly CONFIG_API_MAX_RETRIES=3
