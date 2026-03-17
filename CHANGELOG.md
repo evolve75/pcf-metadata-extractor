@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+- **GitHub Actions CI/CD**: Automated shell script validation workflow
+  - Syntax validation (`bash -n`) for all shell scripts
+  - Standard shellcheck validation
+  - Comprehensive shellcheck (`--enable=all`) with error/warning filtering
+  - Triggers on push/PR to `main` and `next` branches
+
+### Changed
+- Updated CHANGELOG.md with R2.1.0 commit hash reference
+
+### Removed
+- REFACTORING-ANALYSIS file (internal working document)
+
+---
+
 ## [R2.1.0] - 2026-03-16
 
 ### Changed
