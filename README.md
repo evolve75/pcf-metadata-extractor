@@ -62,25 +62,25 @@ pcfusage_abc-company_20260316143022.csv
 
 The report includes the following columns:
 
-| Column | Description |
-|--------|-------------|
-| **Org** | Organization name |
-| **Space** | Space name |
-| **App** | Application name |
-| **Process Type** | Process type (web, worker, etc.) |
-| **Instances** | Number of instances |
-| **Memory(MB)** | Memory allocation in MB |
-| **Disk(MB)** | Disk allocation in MB |
-| **State** | Application state (STARTED, STOPPED) |
-| **Buildpacks** | Buildpack names or Docker image |
-| **Buildpack Details** | Buildpack versions or Docker registry |
-| **Runtime Version** | Runtime version (Java, Node.js, etc.) |
-| **Routes** | Application routes (URLs) |
-| **Domains** | Associated domains |
-| **Service Instances** | Bound service instances with plan details |
-| **Service Bindings** | Service binding names |
-| **Env Vars** | Environment variables (sensitive values redacted) |
-| **Security Groups** | Space, org, and global security groups |
+| Column                | Description                                       |
+|-----------------------|---------------------------------------------------|
+| **Org**               | Organization name                                 |
+| **Space**             | Space name                                        |
+| **App**               | Application name                                  |
+| **Process Type**      | Process type (web, worker, etc.)                  |
+| **Instances**         | Number of instances                               |
+| **Memory(MB)**        | Memory allocation in MB                           |
+| **Disk(MB)**          | Disk allocation in MB                             |
+| **State**             | Application state (STARTED, STOPPED)              |
+| **Buildpacks**        | Buildpack names or Docker image                   |
+| **Buildpack Details** | Buildpack versions or Docker registry             |
+| **Runtime Version**   | Runtime version (Java, Node.js, etc.)             |
+| **Routes**            | Application routes (URLs)                         |
+| **Domains**           | Associated domains                                |
+| **Service Instances** | Bound service instances with plan details         |
+| **Service Bindings**  | Service binding names                             |
+| **Env Vars**          | Environment variables (sensitive values redacted) |
+| **Security Groups**   | Space, org, and global security groups            |
 
 ### Sample Output
 
@@ -99,5 +99,3 @@ abc-company,production,nginx,web,1,512,512,STARTED,nginx:1.21.0,registry:docker.
 - **Service Mapping:** Document service dependencies and bindings
 - **Docker Adoption:** Identify containerized vs buildpack-based applications
 - **Compliance Reporting:** Extract configuration data for compliance reviews
-
-
