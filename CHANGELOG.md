@@ -94,7 +94,7 @@ Platform detection for base64 decoding has been implemented via `util_base64_dec
 
 ## Release Tags
 
-- **R2.1.0**: Script renaming and documentation improvements (commit: TBD)
+- **R2.1.0**: Script renaming and documentation improvements (commit: 3fb6d3b)
 - **R2.0.0**: Major refactoring and project cleanup (commit: 0e54f73)
 - **R1.2.0**: Code quality improvements (commit: 8b042f0)
 - **R1.1.0**: Feature-complete release (commit: bb851db)
