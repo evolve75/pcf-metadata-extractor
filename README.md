@@ -1,9 +1,10 @@
 # Cloud Foundry Application Metadata Extractor (v3 API)
 
-`pcfusage-v3.sh` collects comprehensive Cloud Foundry org, space, app, and process metadata using the **v3 API**.
+`extract-pcf-inventory.sh` collects comprehensive Cloud Foundry org, space, app, and process metadata using the **v3 API**.
 It produces detailed CSV reports for auditing, reporting, and migration analysis (e.g., CF → OpenShift).
 
 ## Features
+
 - **v3 API Support:** Works on foundations with v2 API disabled
 - **Comprehensive Metadata:** Org, space, app, processes, buildpacks, routes, domains, services, security groups
 - **Docker Support:** Extracts Docker image and registry information for containerized apps
@@ -13,21 +14,41 @@ It produces detailed CSV reports for auditing, reporting, and migration analysis
 - **Security Groups:** Captures org-level, space-level, and global security group assignments
 - **RFC 4180 CSV:** Proper CSV escaping for special characters (commas, quotes, newlines)
 - **Data Quality Tracking:** Reports warnings for incomplete data
-- **Debug Mode:** Optional `--debug` flag for verbose diagnostic output  
+- **Debug Mode:** Optional `--debug` flag for verbose diagnostic output
 
 ## Requirements
-- Logged into Cloud Foundry (`cf login`)  
-- `cf` CLI and `jq` installed  
+
+- Logged into Cloud Foundry (`cf login`)
+- `cf` CLI and `jq` installed
 
 ## Usage
+
 ```bash
-chmod +x pcfusage-v3.sh
-./pcfusage-v3.sh <org_name> [--debug]
+chmod +x extract-pcf-inventory.sh
+./extract-pcf-inventory.sh <org_name> [options]
+./extract-pcf-inventory.sh -h|--help
 ```
 
-Example:
+### Options
+
+- `-o, --output FILE` - Custom output CSV file path (default: `pcfusage_<org>_YYYYMMDDHHMMSS.csv`)
+- `-d, --debug` - Enable verbose diagnostic output
+- `-h, --help` - Display comprehensive help message
+
+### Examples
+
 ```bash
-./pcfusage-v3.sh abc-company
+# Basic extraction
+./extract-pcf-inventory.sh abc-company
+
+# Custom output file
+./extract-pcf-inventory.sh abc-company -o /tmp/my-report.csv
+
+# Enable debug output
+./extract-pcf-inventory.sh abc-company --debug
+
+# Show help
+./extract-pcf-inventory.sh --help
 ```
 
 ## Output
@@ -64,6 +85,7 @@ abc-company,production,nginx,web,1,512,512,STARTED,nginx:1.21.0,registry:docker.
 ```
 
 ## Common Uses
+
 - **Migration Planning:** Complete inventory for CF → OpenShift/Kubernetes migrations
 - **Resource Auditing:** Memory, disk, and instance usage across org
 - **Buildpack Analysis:** Identify buildpack versions and upgrade candidates

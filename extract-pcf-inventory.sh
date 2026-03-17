@@ -10,6 +10,9 @@ set -euo pipefail
 # CONFIGURATION CONSTANTS
 # ============================================================================
 
+# Script Metadata
+readonly SCRIPT_NAME="$(basename "$0")"
+
 # API Configuration
 readonly CONFIG_API_MAX_RETRIES=3
 readonly CONFIG_API_MAX_RETRIES_OPTIONAL=2
@@ -1465,12 +1468,12 @@ function extract_processes() {
 #   Outputs help text and exits with code 0
 # ----------------------------------------------------------------------------
 function cli_show_help() {
-  cat << 'EOF'
+  cat << EOF
 Cloud Foundry Application Metadata Extractor (v3 API)
 
 USAGE:
-  pcfusage-v3.sh <org_name> [options]
-  pcfusage-v3.sh -h|--help
+  ${SCRIPT_NAME} <org_name> [options]
+  ${SCRIPT_NAME} -h|--help
 
 ARGUMENTS:
   <org_name>    Cloud Foundry organization name to extract metadata from
@@ -1513,16 +1516,16 @@ REQUIREMENTS:
 
 EXAMPLES:
   # Extract metadata for abc-company org
-  ./pcfusage-v3.sh abc-company
+  ./${SCRIPT_NAME} abc-company
 
   # Extract with custom output file
-  ./pcfusage-v3.sh abc-company -o /tmp/report.csv
+  ./${SCRIPT_NAME} abc-company -o /tmp/report.csv
 
   # Extract with debug output
-  ./pcfusage-v3.sh abc-company --debug
+  ./${SCRIPT_NAME} abc-company --debug
 
   # Show this help message
-  ./pcfusage-v3.sh --help
+  ./${SCRIPT_NAME} --help
 
 COMMON USES:
   • Migration planning (CF → OpenShift/Kubernetes)
@@ -1566,8 +1569,8 @@ function cli_validate_environment() {
 # ----------------------------------------------------------------------------
 function cli_validate_required_args() {
   if [[ -z "${ORG_NAME}" ]]; then
-    echo "Usage: $0 <org_name> [options]"
-    echo "Try '$0 --help' for more information."
+    echo "Usage: ${SCRIPT_NAME} <org_name> [options]"
+    echo "Try '${SCRIPT_NAME} --help' for more information."
     exit 1
   fi
 }
@@ -1619,7 +1622,7 @@ function cli_parse_args() {
       -o|--output)
         if [[ -z "${2:-}" ]]; then
           echo "Error: --output requires a file path argument"
-          echo "Try '$0 --help' for more information."
+          echo "Try '${SCRIPT_NAME} --help' for more information."
           exit 1
         fi
         OUTFILE="$2"
@@ -1630,7 +1633,7 @@ function cli_parse_args() {
         ;;
       -*)
         echo "Unknown option: $1"
-        echo "Try '$0 --help' for more information."
+        echo "Try '${SCRIPT_NAME} --help' for more information."
         exit 1
         ;;
       *)
@@ -1638,7 +1641,7 @@ function cli_parse_args() {
           ORG_NAME="$1"
         else
           echo "Error: Unexpected argument: $1"
-          echo "Try '$0 --help' for more information."
+          echo "Try '${SCRIPT_NAME} --help' for more information."
           exit 1
         fi
         shift

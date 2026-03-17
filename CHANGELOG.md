@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [R2.1.0] - 2026-03-16
+
+### Changed
+- **Script renamed**: `pcfusage-v3.sh` → `extract-pcf-inventory.sh` for clarity (verb-noun naming convention)
+- Script name references now use dynamic basename (`$SCRIPT_NAME`) instead of hardcoded values
+- Updated README.md with new script name and improved CLI documentation
+
+### Added
+- Comprehensive CLI options documentation in README.md
+- Multiple usage examples showing new flags (`-o`, `-d`, `-h`)
+
+---
+
 ## [R2.0.0] - 2026-03-16
 
 ### Added
@@ -73,16 +86,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ISSUE-005: Base64 Decoding Platform Compatibility
 
-**Status**: Open
+**Status**: Fixed (R1.1.0+)
 
-The script currently uses `base64 -D` (macOS syntax) for decoding buildpack metadata. Linux systems require `base64 -d` (lowercase). This causes buildpack extraction to fail on Linux without platform detection.
-
-**Workaround**: Run the script on macOS systems, or manually adjust the base64 flag before execution on Linux.
+Platform detection for base64 decoding has been implemented via `util_base64_decode()` function. The script automatically uses the correct flag based on the operating system (`-D` for macOS, `-d` for Linux).
 
 ---
 
 ## Release Tags
 
+- **R2.1.0**: Script renaming and documentation improvements (commit: TBD)
 - **R2.0.0**: Major refactoring and project cleanup (commit: 0e54f73)
 - **R1.2.0**: Code quality improvements (commit: 8b042f0)
 - **R1.1.0**: Feature-complete release (commit: bb851db)
