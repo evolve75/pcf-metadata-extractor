@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Updated CHANGELOG.md with R2.1.0 commit hash reference
 
+### Fixed
+- **stdout/stderr redirection in extract_org_guid**: Corrected output redirection to prevent API call failures
+  - Status message now properly redirected to stderr (`>&2`) on line 748
+  - Fixes issue where `ORG_GUID` variable captured multi-line output including status messages
+  - Resolves "Max retries exceeded" errors when fetching organization-scoped resources (security groups, etc.)
+  - API endpoints now receive clean GUID values instead of contaminated multi-line strings
+
 ### Removed
 - REFACTORING-ANALYSIS file (internal working document)
 
