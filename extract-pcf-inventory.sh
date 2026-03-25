@@ -745,7 +745,7 @@ function extract_org_guid() {
     exit 1
   fi
 
-  echo "✅ Organization: ${org_name} (${org_guid})"
+  echo "✅ Organization: ${org_name} (${org_guid})" >&2
   echo "${org_guid}"
 }
 
