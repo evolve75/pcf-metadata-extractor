@@ -12,9 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Actual resource usage extraction** for OpenShift migration planning
   - `Memory Usage(MB)` column: Real-time memory consumption from running instances
-  - `Disk Usage(MB)` column: Real-time ephemeral disk usage from running instances
+  - `Disk Usage(MB)` column: Real-time ephemeral disk usage per instance
+  - `Total Disk Usage(MB)` column: **Pre-calculated total** (Disk Usage × Instances) for cluster capacity planning
   - Uses `/v3/processes/{guid}/stats` API to fetch actual usage vs allocated quotas
   - Critical for right-sizing OpenShift pod `ephemeral-storage` requests/limits
+  - Prevents common sizing mistake of summing per-instance values incorrectly
 - **Volume service detection** for persistent storage requirements
   - `Volume Services` column: Identifies apps with persistent storage needs
   - `Volume Size(GB)` column: Capacity requirements for PersistentVolumeClaims
@@ -31,9 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Triggers on push/PR to `main` and `next` branches
 
 ### Changed
-- **CSV schema expanded** from 17 to 21 columns
-  - Added `Memory Usage(MB)` and `Disk Usage(MB)` after `Disk(MB)`
+- **CSV schema expanded** from 17 to 22 columns
+  - Added `Memory Usage(MB)`, `Disk Usage(MB)`, and `Total Disk Usage(MB)` after `Disk(MB)`
   - Added `Volume Services` and `Volume Size(GB)` after `Service Bindings`
+  - `Total Disk Usage(MB)` = pre-calculated value to prevent capacity planning errors
   - Maintains backward compatibility for existing columns
 - **README.md enhanced** with OpenShift migration planning guide
   - Detailed column mapping to OpenShift resources (PVCs, ephemeral-storage, etc.)

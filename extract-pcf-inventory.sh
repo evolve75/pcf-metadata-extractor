@@ -36,7 +36,7 @@ readonly CONFIG_REDACTION_PLACEHOLDER="<REDACTED>"
 # CSV Column Definitions (order matters for output)
 readonly CONFIG_CSV_COLUMNS=(
   "Org" "Space" "App" "Process Type" "Instances"
-  "Memory(MB)" "Disk(MB)" "Memory Usage(MB)" "Disk Usage(MB)" "State" "Buildpacks"
+  "Memory(MB)" "Disk(MB)" "Memory Usage(MB)" "Disk Usage(MB)" "Total Disk Usage(MB)" "State" "Buildpacks"
   "Buildpack Details" "Runtime Version" "Routes"
   "Domains" "Service Instances" "Service Bindings"
   "Volume Services" "Volume Size(GB)"
@@ -1554,15 +1554,22 @@ function extract_processes() {
     local mem_usage="${EXTRACTED_MEMORY_USAGE}"
     local disk_usage="${EXTRACTED_DISK_USAGE}"
 
+    # Calculate total disk usage across all instances
+    # Critical for OpenShift ephemeral storage capacity planning
+    local total_disk_usage=""
+    if [[ -n "${disk_usage}" ]]; then
+      total_disk_usage=$((disk_usage * instances))
+    fi
+
     # Aggregate all security groups (space + org + global)
     local all_security_groups
     all_security_groups=$(aggregate_security_groups \
       "${space_security_groups}" "${org_security_groups}" "${global_security_groups}")
 
-    # Write CSV row with new columns: Memory Usage(MB), Disk Usage(MB), Volume Services, Volume Size(GB)
+    # Write CSV row with new columns: Memory Usage(MB), Disk Usage(MB), Total Disk Usage(MB), Volume Services, Volume Size(GB)
     echo "$(csv_escape_field "${ORG_NAME}"),$(csv_escape_field "${space_name}")," \
          "$(csv_escape_field "${app_name}"),$(csv_escape_field "${proc_type}")," \
-         "${instances},${mem},${disk},${mem_usage},${disk_usage}," \
+         "${instances},${mem},${disk},${mem_usage},${disk_usage},${total_disk_usage}," \
          "$(csv_escape_field "${app_state}")," \
          "$(csv_escape_field "${buildpacks}")," \
          "$(csv_escape_field "${buildpack_details}")," \
@@ -1627,11 +1634,11 @@ OUTPUT:
   Generates a timestamped CSV file:
     pcfusage_<org_name>_YYYYMMDDHHMMSS.csv
 
-  CSV columns (21 total):
+  CSV columns (22 total):
     Org, Space, App, Process Type, Instances, Memory(MB), Disk(MB),
-    Memory Usage(MB), Disk Usage(MB), State, Buildpacks, Buildpack Details,
-    Runtime Version, Routes, Domains, Service Instances, Service Bindings,
-    Volume Services, Volume Size(GB), Env Vars, Security Groups
+    Memory Usage(MB), Disk Usage(MB), Total Disk Usage(MB), State, Buildpacks,
+    Buildpack Details, Runtime Version, Routes, Domains, Service Instances,
+    Service Bindings, Volume Services, Volume Size(GB), Env Vars, Security Groups
 
 REQUIREMENTS:
   • Cloud Foundry CLI (cf) installed
