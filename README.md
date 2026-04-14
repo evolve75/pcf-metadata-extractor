@@ -7,6 +7,8 @@ It produces detailed CSV reports for auditing, reporting, and migration analysis
 
 - **v3 API Support:** Works on foundations with v2 API disabled
 - **Comprehensive Metadata:** Org, space, app, processes, buildpacks, routes, domains, services, security groups
+- **Actual Resource Usage:** Extracts real-time memory and disk usage from running instances (for OpenShift sizing)
+- **Volume Service Detection:** Identifies persistent storage requirements for PersistentVolumeClaim (PVC) planning
 - **Docker Support:** Extracts Docker image and registry information for containerized apps
 - **Security:** Sanitizes sensitive environment variables (passwords, tokens, secrets, keys)
 - **Robust Error Handling:** Retry logic with exponential backoff for transient failures
@@ -60,39 +62,73 @@ pcfusage_abc-company_20260316143022.csv
 
 ### CSV Columns
 
-The report includes the following columns:
+The report includes the following 21 columns:
 
-| Column                | Description                                       |
-|-----------------------|---------------------------------------------------|
-| **Org**               | Organization name                                 |
-| **Space**             | Space name                                        |
-| **App**               | Application name                                  |
-| **Process Type**      | Process type (web, worker, etc.)                  |
-| **Instances**         | Number of instances                               |
-| **Memory(MB)**        | Memory allocation in MB                           |
-| **Disk(MB)**          | Disk allocation in MB                             |
-| **State**             | Application state (STARTED, STOPPED)              |
-| **Buildpacks**        | Buildpack names or Docker image                   |
-| **Buildpack Details** | Buildpack versions or Docker registry             |
-| **Runtime Version**   | Runtime version (Java, Node.js, etc.)             |
-| **Routes**            | Application routes (URLs)                         |
-| **Domains**           | Associated domains                                |
-| **Service Instances** | Bound service instances with plan details         |
-| **Service Bindings**  | Service binding names                             |
-| **Env Vars**          | Environment variables (sensitive values redacted) |
-| **Security Groups**   | Space, org, and global security groups            |
+| Column                | Description                                       | OpenShift Migration Use |
+|-----------------------|---------------------------------------------------|------------------------|
+| **Org**               | Organization name                                 | - |
+| **Space**             | Space name                                        | Namespace planning |
+| **App**               | Application name                                  | Deployment name |
+| **Process Type**      | Process type (web, worker, etc.)                  | Container type |
+| **Instances**         | Number of instances                               | Replica count |
+| **Memory(MB)**        | Memory allocation quota in MB                     | Memory limit reference |
+| **Disk(MB)**          | Disk allocation quota in MB                       | Ephemeral storage limit reference |
+| **Memory Usage(MB)**  | **Actual memory usage** from running instances    | **Memory request/limit sizing** |
+| **Disk Usage(MB)**    | **Actual disk usage** from running instances      | **Ephemeral-storage request/limit** |
+| **State**             | Application state (STARTED, STOPPED)              | - |
+| **Buildpacks**        | Buildpack names or Docker image                   | S2I/Image selection |
+| **Buildpack Details** | Buildpack versions or Docker registry             | Build configuration |
+| **Runtime Version**   | Runtime version (Java, Node.js, etc.)             | Base image selection |
+| **Routes**            | Application routes (URLs)                         | Route/Ingress planning |
+| **Domains**           | Associated domains                                | Domain configuration |
+| **Service Instances** | Bound service instances with plan details         | Operator/service planning |
+| **Service Bindings**  | Service binding names                             | Secret/ConfigMap planning |
+| **Volume Services**   | **Persistent volume service names**               | **PVC identification** |
+| **Volume Size(GB)**   | **Persistent volume sizes in GB**                 | **PVC capacity planning** |
+| **Env Vars**          | Environment variables (sensitive values redacted) | ConfigMap/Secret content |
+| **Security Groups**   | Space, org, and global security groups            | NetworkPolicy planning |
 
 ### Sample Output
 
 ```csv
-Org,Space,App,Process Type,Instances,Memory(MB),Disk(MB),State,Buildpacks,Buildpack Details,Runtime Version,Routes,Domains,Service Instances,Service Bindings,Env Vars,Security Groups
-abc-company,production,api-service,web,3,1024,2048,STARTED,java_buildpack,java_buildpack 4.45,11,api.example.com,example.com,mysql [cleardb/spark (managed)],mysql-binding,DATABASE_URL=<REDACTED>,space:app-sg;global-running:public_networks
-abc-company,production,nginx,web,1,512,512,STARTED,nginx:1.21.0,registry:docker.io,,nginx.example.com,example.com,,,NGINX_WORKER_PROCESSES=4,global-running:public_networks
+Org,Space,App,Process Type,Instances,Memory(MB),Disk(MB),Memory Usage(MB),Disk Usage(MB),State,Buildpacks,Buildpack Details,Runtime Version,Routes,Domains,Service Instances,Service Bindings,Volume Services,Volume Size(GB),Env Vars,Security Groups
+abc-company,production,api-service,web,3,1024,2048,768,1024,STARTED,java_buildpack,java_buildpack 4.45,11,api.example.com,example.com,mysql [cleardb/spark (managed)],mysql-binding,,,DATABASE_URL=<REDACTED>,space:app-sg;global-running:public_networks
+abc-company,production,file-processor,web,2,2048,4096,1536,2800,STARTED,java_buildpack,java_buildpack 4.45,11,files.example.com,example.com,mysql [cleardb/spark (managed)];nfs-volume [nfs/standard (user-provided)],mysql-binding,nfs-volume,50,DATABASE_URL=<REDACTED>;NFS_MOUNT=/data,space:app-sg;global-running:public_networks
+abc-company,production,nginx,web,1,512,512,256,128,STARTED,nginx:1.21.0,registry:docker.io,,nginx.example.com,example.com,,,,,NGINX_WORKER_PROCESSES=4,global-running:public_networks
 ```
 
 ## Common Uses
 
-- **Migration Planning:** Complete inventory for CF → OpenShift/Kubernetes migrations
+### OpenShift Migration Planning
+
+This tool is **optimized for PCF to OpenShift migrations** with critical data for capacity planning:
+
+- **Ephemeral Storage Sizing:**
+  - `Disk Usage(MB)` provides **actual ephemeral disk consumption** per instance
+  - Use this to set `ephemeral-storage` requests/limits in OpenShift pods
+  - Formula: `ephemeral-storage limit = Disk Usage × 1.5` (with 50% buffer)
+  
+- **Persistent Storage (PVC) Planning:**
+  - `Volume Services` identifies apps requiring PersistentVolumeClaims
+  - `Volume Size(GB)` provides exact capacity requirements
+  - Direct 1:1 mapping from CF volume services to OpenShift PVCs
+
+- **Memory/CPU Right-Sizing:**
+  - `Memory Usage(MB)` shows **actual consumption** vs `Memory(MB)` quota
+  - Identify over-provisioned apps where quota >> actual usage
+  - Set OpenShift requests based on actual usage, limits based on quota
+
+- **Example Migration Calculation:**
+  ```
+  CF App: Disk(MB)=4096, Disk Usage(MB)=2800
+  → OpenShift: ephemeral-storage limit = 2800MB × 1.5 = 4200Mi
+  
+  CF App: Volume Services=nfs-volume, Volume Size(GB)=50
+  → OpenShift: PVC with 50Gi capacity
+  ```
+
+### Other Uses
+
 - **Resource Auditing:** Memory, disk, and instance usage across org
 - **Buildpack Analysis:** Identify buildpack versions and upgrade candidates
 - **Security Review:** Audit security group assignments and environment variable usage

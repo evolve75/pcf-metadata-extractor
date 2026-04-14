@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Actual resource usage extraction** for OpenShift migration planning
+  - `Memory Usage(MB)` column: Real-time memory consumption from running instances
+  - `Disk Usage(MB)` column: Real-time ephemeral disk usage from running instances
+  - Uses `/v3/processes/{guid}/stats` API to fetch actual usage vs allocated quotas
+  - Critical for right-sizing OpenShift pod `ephemeral-storage` requests/limits
+- **Volume service detection** for persistent storage requirements
+  - `Volume Services` column: Identifies apps with persistent storage needs
+  - `Volume Size(GB)` column: Capacity requirements for PersistentVolumeClaims
+  - Automatically detects volume-tagged user-provided services
+  - Direct mapping to OpenShift PVC planning
+- **Enhanced error handling** for large-scale enterprise deployments
+  - Graceful degradation when stats API unavailable (stopped apps)
+  - Optional API calls for non-critical data to prevent extraction failures
+  - Optimized for 100s-1000s of applications
 - **GitHub Actions CI/CD**: Automated shell script validation workflow
   - Syntax validation (`bash -n`) for all shell scripts
   - Standard shellcheck validation
@@ -17,6 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Triggers on push/PR to `main` and `next` branches
 
 ### Changed
+- **CSV schema expanded** from 17 to 21 columns
+  - Added `Memory Usage(MB)` and `Disk Usage(MB)` after `Disk(MB)`
+  - Added `Volume Services` and `Volume Size(GB)` after `Service Bindings`
+  - Maintains backward compatibility for existing columns
+- **README.md enhanced** with OpenShift migration planning guide
+  - Detailed column mapping to OpenShift resources (PVCs, ephemeral-storage, etc.)
+  - Migration calculation examples for storage sizing
+  - Capacity planning formulas (e.g., ephemeral-storage = usage × 1.5)
 - Updated CHANGELOG.md with R2.1.0 commit hash reference
 
 ### Fixed
