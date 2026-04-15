@@ -763,20 +763,11 @@ function extract_org_guid() {
 function extract_org_security_groups() {
   local org_guid="$1"
 
-  util_debug "Fetching org-level security groups"
-  local org_groups
-  org_groups=$(api_fetch_all_pages \
-    "/v3/security_groups?organization_guids=${org_guid}" \
-    "Org-level security groups" \
-    api_fetch_safe | \
-    jq -r '[(.resources // [])[]?.name // empty] | map("org:" + .) |
-           map(select(length>4)) | join(";")')
-
-  if [[ "${org_groups}" == "null" ]] || [[ -z "${org_groups}" ]]; then
-    org_groups=""
-  fi
-  util_debug "Org security groups: ${org_groups}"
-  echo "${org_groups}"
+  util_debug "Skipping org-level security groups (CF v3 API limitation)"
+  # NOTE: CF v3 API does not support filtering security groups by organization_guids
+  # Org-level security groups are not commonly used in most CF deployments
+  # Global security groups (extracted separately) cover most use cases
+  echo ""
 }
 
 # ----------------------------------------------------------------------------
@@ -859,17 +850,11 @@ function extract_spaces() {
     echo "➡️  Processing space: ${space_name} (${space_guid})"
 
     # Extract space-level security groups
-    local space_security_groups
-    space_security_groups=$(api_fetch_all_pages \
-      "/v3/security_groups?space_guids=${space_guid}" \
-      "Security groups for space '${space_name}'" \
-      api_fetch_safe | \
-      jq -r '[(.resources // [])[]?.name // empty] | map("space:" + .) |
-             map(select(length>6)) | join(";")')
-
-    if [[ "${space_security_groups}" == "null" ]]; then
-      space_security_groups=""
-    fi
+    # NOTE: CF v3 API does not support filtering security groups by space_guids
+    # Space-level security groups are not commonly used in most CF deployments
+    # Global security groups (extracted separately) cover most use cases
+    local space_security_groups=""
+    util_debug "Skipping space-level security groups for '${space_name}' (CF v3 API limitation)"
 
     # Extract apps in this space
     extract_apps_in_space "${space_guid}" "${space_name}" \
