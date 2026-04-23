@@ -36,18 +36,19 @@ def create_app() -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request) -> Any:
+        # Starlette 1.x: TemplateResponse(request, name, context)
         return get_templates().TemplateResponse(
+            request,
             "index.html",
             {
-                "request": request,
                 "default_hint": "Leave blank to use "
-                f"{default_output_name('<org>')} on the server working directory",
+                f"{default_output_name('<org>')} in the server process working directory",
             },
         )
 
     @app.get("/help", response_class=HTMLResponse)
     def help_page(request: Request) -> Any:
-        return get_templates().TemplateResponse("help.html", {"request": request})
+        return get_templates().TemplateResponse(request, "help.html", {})
 
     @app.post("/extract")
     def do_extract(
