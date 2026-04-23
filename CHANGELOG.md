@@ -9,50 +9,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+---
+
+## [R2.1.1] - 2026-04-23
+
+All changes in this section are since R2.1.0.
+
 ### Added
 - **Actual resource usage extraction** for OpenShift migration planning
-  - `Memory Usage(MB)` column: Real-time memory consumption from running instances
-  - `Disk Usage(MB)` column: Real-time ephemeral disk usage per instance
-  - `Total Disk Usage(MB)` column: **Pre-calculated total** (Disk Usage × Instances) for cluster capacity planning
-  - Uses `/v3/processes/{guid}/stats` API to fetch actual usage vs allocated quotas
-  - Critical for right-sizing OpenShift pod `ephemeral-storage` requests/limits
-  - Prevents common sizing mistake of summing per-instance values incorrectly
+  - `Memory Usage(MB)` column: real-time memory consumption from running instances
+  - `Disk Usage(MB)` column: real-time ephemeral disk usage per instance
+  - `Total Disk Usage(MB)` column: pre-calculated total (Disk Usage × instances) for cluster capacity planning
+  - Uses `/v3/processes/{guid}/stats` to read actual usage vs allocated quotas
+  - Helps right-size OpenShift pod `ephemeral-storage` requests and limits; avoids summing per-instance values incorrectly
 - **Volume service detection** for persistent storage requirements
-  - `Volume Services` column: Identifies apps with persistent storage needs
-  - `Volume Size(GB)` column: Capacity requirements for PersistentVolumeClaims
-  - Automatically detects volume-tagged user-provided services
-  - Direct mapping to OpenShift PVC planning
-- **Enhanced error handling** for large-scale enterprise deployments
-  - Graceful degradation when stats API unavailable (stopped apps)
-  - Optional API calls for non-critical data to prevent extraction failures
-  - Optimized for 100s-1000s of applications
-- **GitHub Actions CI/CD**: Automated shell script validation workflow
-  - Syntax validation (`bash -n`) for all shell scripts
-  - Standard shellcheck validation
-  - Comprehensive shellcheck (`--enable=all`) with error/warning filtering
-  - Triggers on push/PR to `main` and `next` branches
+  - `Volume Services` column: flags apps with persistent storage needs
+  - `Volume Size(GB)` column: capacity for PVC-style planning
+  - Detects volume-tagged user-provided services; maps to OpenShift PVC planning
+- **GitHub Actions CI**: shell script validation on push/PR to `main` and `next`
+  - `bash -n`, `shellcheck`, and `shellcheck --enable=all` (with the project’s expected filtering)
+- **Hardening for large foundations**: graceful behavior when the stats API is unavailable (e.g. stopped apps), optional calls where data is non-critical, suitable for many hundreds of applications
 
 ### Changed
-- **CSV schema expanded** from 17 to 22 columns
-  - Added `Memory Usage(MB)`, `Disk Usage(MB)`, and `Total Disk Usage(MB)` after `Disk(MB)`
-  - Added `Volume Services` and `Volume Size(GB)` after `Service Bindings`
-  - `Total Disk Usage(MB)` = pre-calculated value to prevent capacity planning errors
-  - Maintains backward compatibility for existing columns
-- **README.md enhanced** with OpenShift migration planning guide
-  - Detailed column mapping to OpenShift resources (PVCs, ephemeral-storage, etc.)
-  - Migration calculation examples for storage sizing
-  - Capacity planning formulas (e.g., ephemeral-storage = usage × 1.5)
-- Updated CHANGELOG.md with R2.1.0 commit hash reference
+- **CSV schema (17 → 22 columns)**: new columns for memory and disk usage, total disk usage, and volume service fields; backward compatible for prior columns; `Total Disk Usage(MB)` is pre-calculated to avoid capacity planning mistakes
+- **README.md**: OpenShift migration guidance, table layout, and structure
+- **`.gitignore`**: ignore repository root `test-data/` (local test fixtures, not tracked)
 
 ### Fixed
-- **stdout/stderr redirection in extract_org_guid**: Corrected output redirection to prevent API call failures
-  - Status message now properly redirected to stderr (`>&2`) on line 748
-  - Fixes issue where `ORG_GUID` variable captured multi-line output including status messages
-  - Resolves "Max retries exceeded" errors when fetching organization-scoped resources (security groups, etc.)
-  - API endpoints now receive clean GUID values instead of contaminated multi-line strings
+- **Security groups API**: `CF-UnprocessableEntity` when using unsupported `organization_guids` / `space_guids` filters; align with CF v3 behavior and rely on global security groups where org/space scoping is not supported
+- **`extract_org_guid`**: status output sent to stderr so `ORG_GUID` is a single clean GUID, fixing “max retries” and bad requests for org-scoped resources (including security groups)
+- **API response handling**: first-load / mixed GUID-and-status responses from endpoints
+- **ShellCheck SC2155** in `extract-pcf-inventory.sh` (no masked exit status in assignments)
 
 ### Removed
-- REFACTORING-ANALYSIS file (internal working document)
+- `REFACTORING-ANALYSIS` (internal working document)
 
 ---
 
@@ -143,6 +133,7 @@ Platform detection for base64 decoding has been implemented via `util_base64_dec
 
 ## Release Tags
 
+- **R2.1.1**: OpenShift usage and volume columns, GHA, security group and parsing fixes, `test-data/` gitignore
 - **R2.1.0**: Script renaming and documentation improvements (commit: 3fb6d3b)
 - **R2.0.0**: Major refactoring and project cleanup (commit: 0e54f73)
 - **R1.2.0**: Code quality improvements (commit: 8b042f0)
