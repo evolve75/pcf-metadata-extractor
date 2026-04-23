@@ -6,7 +6,8 @@
 .sidecar-start.sh
 .sidecar-base
 .td-root
-/test-data/
+# Local samples and test fixtures (not versioned)
+test-data/
 # Python / uv
 .venv/
 __pycache__/

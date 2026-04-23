@@ -4,48 +4,129 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PCF inventory — pcf-inventory-extractor</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@500;600&family=Red+Hat+Text:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/app.css" />
 </head>
 <body>
-  <div class="rh-shell">
-    <header class="rh-masthead" role="banner">
-      <div class="rh-masthead__inner">
-        <h1 class="rh-masthead__title">Red Hat <span class="rh-masthead__product">· PCF metadata extractor</span></h1>
+  <div class="app-shell">
+    <header class="app-masthead" role="banner">
+      <div class="app-masthead__inner">
+        <h1 class="app-masthead__title">PCF metadata extractor</h1>
       </div>
     </header>
-    <main class="rh-main" id="main">
-      <div class="rh-card">
-        <span class="rh-eyebrow">Tool</span>
+    <main class="app-main" id="main">
+      <div class="app-card">
         <h1>Cloud Foundry org inventory (CSV)</h1>
-        <p class="rh-lead">Requires <code>cf login</code> on the host running this server. Output matches
-          <code>pcf-inventory-extract</code> and the reference shell script.</p>
-        <h2 class="rh-section-title">Extraction</h2>
-        <form class="rh-form" method="post" action="/extract" id="f">
-          <div class="rh-form__fields">
-            <p>
-              <label for="org_name">Organization</label>
-              <input id="org_name" name="org_name" type="text" required placeholder="e.g. my-org" autocomplete="off" />
+        <p class="app-summary">Collects org, space, app, and process data from the Cloud Foundry v3 API and writes one CSV you can use for migration planning, audits, and reporting.</p>
+        <p class="app-lead">Requires <code>cf login</code> on the host running this server.</p>
+        <form
+          class="app-form"
+          method="post"
+          action="/extract"
+          id="f"
+          title="Submit runs the extract on the server; your browser then downloads the CSV. All fields are sent to this application only."
+        >
+          <h2 class="app-section-title" title="Set the org name and options, then download the generated report.">Extraction</h2>
+          <p class="app-form__required-legend" id="form-required-legend">
+            Fields marked with <span class="app-required" aria-hidden="true">*</span> are required.
+          </p>
+          <div class="app-form__fields" aria-describedby="form-required-legend">
+            <p class="app-checkbox">
+              <input
+                name="cf_login_confirmed"
+                type="checkbox"
+                value="on"
+                id="cf_login_confirmed"
+                required
+                aria-required="true"
+                title="The server uses the cf CLI session on this machine. Check this only after you have run cf login in this environment."
+              />
+              <label
+                for="cf_login_confirmed"
+                title="The server uses the cf CLI session on this machine. Check this only after you have run cf login in this environment."
+              ><span class="app-required" aria-hidden="true">*</span> I confirm that <code>cf login</code> has been completed for this host.</label>
             </p>
             <p>
-              <label for="output_path">Output file <span class="visually-hidden">(optional)</span></label>
-              <input id="output_path" name="output_path" type="text" placeholder="Optional — default is pcfusage_…" autocomplete="off" />
+              <label
+                for="org_name"
+                title="Name of the Cloud Foundry organization to inventory, as shown in cf orgs or the console."
+              >Organization <span class="app-required" aria-hidden="true">*</span></label>
+              <input
+                id="org_name"
+                name="org_name"
+                type="text"
+                required
+                aria-required="true"
+                minlength="1"
+                pattern=".*\S.*"
+                placeholder="e.g. my-org"
+                autocomplete="off"
+                title="Enter the organization name (cannot be only spaces). It must match a CF org you can access."
+              />
             </p>
-            <p class="rh-checkbox">
-              <input name="debug" type="checkbox" value="on" id="debug" />
-              <label for="debug">Debug (verbose diagnostics to server stderr)</label>
+            <p>
+              <label
+                for="output_path"
+                title="If empty, the file is saved in the server process working directory with a timestamped pcfusage_… name."
+              >Output file <span class="app-label-optional">(optional)</span></label>
+              <input
+                id="output_path"
+                name="output_path"
+                type="text"
+                placeholder="Optional — default is pcfusage_…"
+                autocomplete="off"
+                title="If empty, the file is saved in the server process working directory with a timestamped pcfusage_… name."
+              />
+            </p>
+            <p class="app-checkbox">
+              <input
+                name="debug"
+                type="checkbox"
+                value="on"
+                id="debug"
+                title="When enabled, the server writes extra API and diagnostic details to its stderr (view server logs, not the browser)."
+              />
+              <label
+                for="debug"
+                title="When enabled, the server writes extra API and diagnostic details to its stderr (view server logs, not the browser)."
+              >Debug (verbose diagnostics to server stderr)</label>
             </p>
           </div>
-          <div class="rh-form__actions">
-            <button class="rh-button" type="submit">Download CSV</button>
+          <div class="app-form__actions">
+            <button
+              class="app-button"
+              type="submit"
+              title="Call the v3 API for the org you entered, build the CSV on the server, and download the file in your browser."
+            >Download CSV</button>
           </div>
         </form>
-        <p class="rh-footnav"><a href="/help">Help (CLI options)</a></p>
+        <p class="app-footnav"><a href="/help">Help (CLI options)</a></p>
       </div>
     </main>
-    <footer class="rh-footer">PCF inventory extractor · v3 API · CSV for migration and audit</footer>
+    <footer class="app-footer">
+      <p class="app-footer__tagline">PCF inventory extractor · v3 API · CSV for migration and audit</p>
+      <p class="app-footer__legal">
+        Copyright © 2026 the pcf-inventory-extractor authors. Licensed under the
+        <a href="https://opensource.org/licenses/BSD-3-Clause" rel="license noopener noreferrer" target="_blank">BSD 3-Clause License</a>
+        (SPDX: <code>BSD-3-Clause</code>).
+      </p>
+    </footer>
   </div>
+  <script>
+    (function () {
+      var form = document.getElementById("f");
+      if (!form) return;
+      form.addEventListener(
+        "submit",
+        function (e) {
+          if (!form.checkValidity()) {
+            e.preventDefault();
+            form.reportValidity();
+            return;
+          }
+        },
+        false
+      );
+    })();
+  </script>
 </body>
 </html>

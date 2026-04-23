@@ -7,9 +7,8 @@ import sys
 from typing import Any
 from urllib.parse import quote
 
-from pcf_inventory_extractor.cf_client import list_org_names_for_error
+from pcf_inventory_extractor.client import fetch_all_paged, list_org_names_for_error
 from pcf_inventory_extractor.constants import CONFIG_API_MAX_RETRIES
-from pcf_inventory_extractor.pagination import fetch_all_paged
 from pcf_inventory_extractor.types import ExtractorLike
 
 
@@ -67,7 +66,7 @@ def global_security_groups(ex: ExtractorLike) -> str:
 
 
 def extract_spaces(ex: ExtractorLike) -> None:
-    from pcf_inventory_extractor import app_extract
+    from pcf_inventory_extractor.extraction import app
 
     path = f"/v3/spaces?organization_guids={ex.org_guid}"
     spaces_json = fetch_all_paged(
@@ -84,6 +83,6 @@ def extract_spaces(ex: ExtractorLike) -> None:
         sg = str((res or {}).get("guid", "") or "")
         sn = str((res or {}).get("name", "") or "")
         print(f"Processing space: {sn} ({sg})", file=sys.stderr)
-        app_extract.extract_apps_in_space(
+        app.extract_apps_in_space(
             ex, sg, sn, "", o_sg, g_sg
         )

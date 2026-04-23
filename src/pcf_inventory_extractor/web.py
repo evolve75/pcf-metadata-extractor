@@ -7,12 +7,12 @@ from pathlib import Path
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from pcf_inventory_extractor.inventory import ExtractConfig, default_output_name
+from pcf_inventory_extractor.extraction import ExtractConfig, default_output_name
 from pcf_inventory_extractor.run import run_extraction
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -55,15 +55,32 @@ def create_app() -> FastAPI:
         org_name: str = Form(..., min_length=1, description="CF org name"),
         output_path: str = Form(""),
         debug: str | None = Form(default=None),
+        cf_login_confirmed: str | None = Form(default=None),
     ) -> FileResponse:
+        if (cf_login_confirmed or "").strip().lower() not in (
+            "on",
+            "true",
+            "1",
+            "yes",
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="Confirm that cf login has been completed on this host.",
+            )
+        org = org_name.strip()
+        if not org:
+            raise HTTPException(
+                status_code=400,
+                detail="Organization name is required and cannot be only whitespace.",
+            )
         is_debug = (debug or "").strip().lower() in ("on", "true", "1", "yes")
         o = (output_path or "").strip()
         if o:
             out = Path(o).expanduser()
         else:
-            out = Path(default_output_name(org_name))
+            out = Path(default_output_name(org))
         cfg = ExtractConfig(
-            org_name=org_name.strip(),
+            org_name=org,
             output_path=out.resolve(),
             debug=is_debug,
         )

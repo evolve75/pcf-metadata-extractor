@@ -5,11 +5,11 @@ from __future__ import annotations
 import json
 import sys
 
-from pcf_inventory_extractor import csv_out
+from pcf_inventory_extractor.client import fetch_all_paged
 from pcf_inventory_extractor.constants import CONFIG_API_MAX_RETRIES_OPTIONAL
-from pcf_inventory_extractor.helpers import aggregate_security_groups
-from pcf_inventory_extractor.pagination import fetch_all_paged
+from pcf_inventory_extractor.output.csv import write_row
 from pcf_inventory_extractor.types import ExtractorLike
+from pcf_inventory_extractor.utils.helpers import aggregate_security_groups
 
 
 def _process_stats(
@@ -88,7 +88,7 @@ def extract_processes(
         all_sg = aggregate_security_groups(
             space_security_groups, org_security_groups, global_security_groups
         )
-        csv_out.write_row(
+        write_row(
             ex._fd(),
             org_name,
             space_name,

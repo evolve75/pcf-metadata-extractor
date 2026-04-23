@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pcf_inventory_extractor.cf_client import CfApiClient
-from pcf_inventory_extractor.inventory import ExtractConfig, InventoryExtractor
+from pcf_inventory_extractor.client import CfApiClient
+from pcf_inventory_extractor.extraction import ExtractConfig, InventoryExtractor
 
 
 def run_extraction(cfg: ExtractConfig) -> Path:

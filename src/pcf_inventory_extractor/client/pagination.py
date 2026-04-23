@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from pcf_inventory_extractor.cf_client import CfApiClient
+from pcf_inventory_extractor.client.http import CfApiClient
 from pcf_inventory_extractor.constants import (
     CONFIG_API_MAX_RETRIES,
     CONFIG_API_MAX_RETRIES_OPTIONAL,

@@ -7,12 +7,12 @@ import re
 import sys
 from typing import Any
 
-from pcf_inventory_extractor import process_extract, sanitize
-from pcf_inventory_extractor.cf_client import fetch_safe_body
+from pcf_inventory_extractor import sanitize
+from pcf_inventory_extractor.client import fetch_all_paged, fetch_safe_body
 from pcf_inventory_extractor.constants import CONFIG_API_MAX_RETRIES_OPTIONAL
-from pcf_inventory_extractor.helpers import util_append_to_list
-from pcf_inventory_extractor.pagination import fetch_all_paged
+from pcf_inventory_extractor.extraction import process
 from pcf_inventory_extractor.types import ExtractorLike
+from pcf_inventory_extractor.utils.helpers import util_append_to_list
 
 
 def extract_apps_in_space(
@@ -130,7 +130,7 @@ def extract_app_metadata(
     env_vars = sanitize.sanitize_env_vars_from_api(env_raw, ex._validate)
     if env_vars == "null":
         env_vars = ""
-    process_extract.extract_processes(
+    process.extract_processes(
         ex,
         app_guid,
         app_name,

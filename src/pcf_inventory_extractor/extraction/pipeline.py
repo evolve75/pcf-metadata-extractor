@@ -9,10 +9,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import TextIO
 
-from pcf_inventory_extractor import csv_out, org_extract
-from pcf_inventory_extractor.cf_client import CfApiClient
+from pcf_inventory_extractor.client import CfApiClient
 from pcf_inventory_extractor.constants import CONFIG_CSV_TIMESTAMP_FORMAT, CONFIG_OUTPUT_PREFIX
-from pcf_inventory_extractor.helpers import log_debug
+from pcf_inventory_extractor.extraction import org
+from pcf_inventory_extractor.output.csv import write_header
+from pcf_inventory_extractor.utils.helpers import log_debug
 
 
 def default_output_name(org: str) -> str:
@@ -92,13 +93,13 @@ class InventoryExtractor:
                 self.cfg.output_path, "w", encoding="utf-8", newline=""
             )
             try:
-                csv_out.write_header(self._out)
-                self.org_guid = org_extract.extract_org_guid(self)
-                self.org_sg = org_extract.org_security_groups(
+                write_header(self._out)
+                self.org_guid = org.extract_org_guid(self)
+                self.org_sg = org.org_security_groups(
                     self, self.org_guid
                 )
-                self.global_sg = org_extract.global_security_groups(self)
-                org_extract.extract_spaces(self)
+                self.global_sg = org.global_security_groups(self)
+                org.extract_spaces(self)
             finally:
                 if self._out:
                     self._out.close()

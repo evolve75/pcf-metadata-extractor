@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Protocol, TextIO
 
-from pcf_inventory_extractor.cf_client import CfApiClient
+from pcf_inventory_extractor.client import CfApiClient
 
 
 class ExtractorLike(Protocol):

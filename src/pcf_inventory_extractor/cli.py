@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from pcf_inventory_extractor.inventory import ExtractConfig, default_output_name
+from pcf_inventory_extractor.extraction import ExtractConfig, default_output_name
 from pcf_inventory_extractor.run import run_extraction
 
 
