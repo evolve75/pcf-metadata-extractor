@@ -2,27 +2,50 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>pcf-inventory-extractor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PCF inventory — pcf-inventory-extractor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@500;600&family=Red+Hat+Text:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/app.css" />
 </head>
 <body>
-  <h1>PCF / Cloud Foundry inventory (CSV)</h1>
-  <p>Requires <code>cf login</code> on the machine running this server. Output is identical to
-  the <code>pcf-inventory-extract</code> CLI and the reference shell script.</p>
-  <form method="post" action="/extract" id="f">
-    <p>
-      <label>Organization <input name="org_name" required placeholder="e.g. my-org" /></label>
-    </p>
-    <p>
-      <label>Output file (optional)
-        <input name="output_path" type="text" size="50" placeholder="pcfusage_…" />
-      </label>
-    </p>
-    <p>
-      <label><input name="debug" type="checkbox" value="on" /> Debug (verbose stderr on server)</label>
-    </p>
-    <p><button type="submit">Download CSV</button></p>
-  </form>
-  <p><a href="/help">Help (CLI options)</a></p>
+  <div class="rh-shell">
+    <header class="rh-masthead" role="banner">
+      <div class="rh-masthead__inner">
+        <h1 class="rh-masthead__title">Red Hat <span class="rh-masthead__product">· PCF metadata extractor</span></h1>
+      </div>
+    </header>
+    <main class="rh-main" id="main">
+      <div class="rh-card">
+        <span class="rh-eyebrow">Tool</span>
+        <h1>Cloud Foundry org inventory (CSV)</h1>
+        <p class="rh-lead">Requires <code>cf login</code> on the host running this server. Output matches
+          <code>pcf-inventory-extract</code> and the reference shell script.</p>
+        <h2 class="rh-section-title">Extraction</h2>
+        <form class="rh-form" method="post" action="/extract" id="f">
+          <div class="rh-form__fields">
+            <p>
+              <label for="org_name">Organization</label>
+              <input id="org_name" name="org_name" type="text" required placeholder="e.g. my-org" autocomplete="off" />
+            </p>
+            <p>
+              <label for="output_path">Output file <span class="visually-hidden">(optional)</span></label>
+              <input id="output_path" name="output_path" type="text" placeholder="Optional — default is pcfusage_…" autocomplete="off" />
+            </p>
+            <p class="rh-checkbox">
+              <input name="debug" type="checkbox" value="on" id="debug" />
+              <label for="debug">Debug (verbose diagnostics to server stderr)</label>
+            </p>
+          </div>
+          <div class="rh-form__actions">
+            <button class="rh-button" type="submit">Download CSV</button>
+          </div>
+        </form>
+        <p class="rh-footnav"><a href="/help">Help (CLI options)</a></p>
+      </div>
+    </main>
+    <footer class="rh-footer">PCF inventory extractor · v3 API · CSV for migration and audit</footer>
+  </div>
 </body>
 </html>
