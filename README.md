@@ -145,3 +145,41 @@ This tool is **optimized for PCF to OpenShift migrations** with critical data fo
 - **Service Mapping:** Document service dependencies and bindings
 - **Docker Adoption:** Identify containerized vs buildpack-based applications
 - **Compliance Reporting:** Extract configuration data for compliance reviews
+
+## Python implementation (`pcf-inventory-extractor`)
+
+The same CF v3 logic is available as a **Python** package (HTTP via **httpx**, no `jq` at runtime). The original **bash** script `extract-pcf-inventory.sh` remains in the repo as a **reference** implementation.
+
+### Requirements
+
+- Python 3.12+ (see `.python-version`; use **uv** to install the pinned interpreter)
+- Cloud Foundry CLI (`cf`) installed and logged in (`cf login`); the Python code uses `cf api` and `cf oauth-token` for the API base URL and bearer token
+
+### Install (uv)
+
+```bash
+uv sync
+# optional dev tools (ruff, pytest)
+uv sync --all-groups
+```
+
+### CLI (same flags as the shell script)
+
+```bash
+uv run pcf-inventory-extract <org_name> [-o output.csv] [-d]
+```
+
+### Web UI
+
+```bash
+uv run pcf-inventory-serve --host 127.0.0.1 --port 8080
+```
+
+Open the shown URL, enter the org name, optional output path, optional debug, and submit to **download** the CSV.
+
+### Develop
+
+```bash
+uv run ruff check src tests
+uv run pytest
+```

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>pcf-inventory-extractor</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <h1>PCF / Cloud Foundry inventory (CSV)</h1>
+  <p>Requires <code>cf login</code> on the machine running this server. Output is identical to
+  the <code>pcf-inventory-extract</code> CLI and the reference shell script.</p>
+  <form method="post" action="/extract" id="f">
+    <p>
+      <label>Organization <input name="org_name" required placeholder="e.g. my-org" /></label>
+    </p>
+    <p>
+      <label>Output file (optional)
+        <input name="output_path" type="text" size="50" placeholder="pcfusage_…" />
+      </label>
+    </p>
+    <p>
+      <label><input name="debug" type="checkbox" value="on" /> Debug (verbose stderr on server)</label>
+    </p>
+    <p><button type="submit">Download CSV</button></p>
+  </form>
+  <p><a href="/help">Help (CLI options)</a></p>
+</body>
+</html>
