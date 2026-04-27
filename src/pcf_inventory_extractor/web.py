@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import threading
+import webbrowser
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +14,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from pcf_inventory_extractor.client import CfProgrammaticAuthError
 from pcf_inventory_extractor.extraction import ExtractConfig, default_output_name
 from pcf_inventory_extractor.run import run_extraction
 
@@ -53,20 +56,12 @@ def create_app() -> FastAPI:
     @app.post("/extract")
     def do_extract(
         org_name: str = Form(..., min_length=1, description="CF org name"),
+        cf_api_url: str = Form(..., min_length=1, description="CF API URL (cf login -a)"),
+        cf_username: str = Form(..., min_length=1, description="CF username"),
+        cf_password: str = Form(..., min_length=1, description="CF password"),
         output_path: str = Form(""),
         debug: str | None = Form(default=None),
-        cf_login_confirmed: str | None = Form(default=None),
     ) -> FileResponse:
-        if (cf_login_confirmed or "").strip().lower() not in (
-            "on",
-            "true",
-            "1",
-            "yes",
-        ):
-            raise HTTPException(
-                status_code=400,
-                detail="Confirm that cf login has been completed on this host.",
-            )
         org = org_name.strip()
         if not org:
             raise HTTPException(
@@ -83,8 +78,14 @@ def create_app() -> FastAPI:
             org_name=org,
             output_path=out.resolve(),
             debug=is_debug,
+            cf_api_url=cf_api_url.strip(),
+            cf_username=cf_username.strip(),
+            cf_password=cf_password,
         )
-        run_extraction(cfg)
+        try:
+            run_extraction(cfg)
+        except CfProgrammaticAuthError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
         p = out.resolve()
         return FileResponse(
             path=str(p),
@@ -98,10 +99,30 @@ def create_app() -> FastAPI:
     return app
 
 
+def _url_for_browser(host: str, port: int) -> str:
+    """Host/port the app binds to; return a URL a local browser can open."""
+    h = (host or "").strip()
+    if h in ("0.0.0.0", ""):
+        h = "127.0.0.1"
+    elif h in ("::", "[::]"):
+        h = "127.0.0.1"
+    elif ":" in h and not h.startswith("["):
+        h = f"[{h}]"
+    return f"http://{h}:{port}/"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8080)
+    parser.add_argument(
+        "--open",
+        action="store_true",
+        help="Open the app URL in the default browser after the server starts.",
+    )
     a = parser.parse_args()
     app = create_app()
+    if a.open:
+        url = _url_for_browser(a.host, a.port)
+        threading.Timer(0.4, lambda u=url: webbrowser.open(u)).start()
     uvicorn.run(app, host=a.host, port=a.port, log_level="info")

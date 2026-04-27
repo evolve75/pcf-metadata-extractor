@@ -1,5 +1,9 @@
 """Configuration constants (ported from extract-pcf-inventory.sh)."""
 
+# When False, TLS certificate verification is disabled for all HTTP(S) calls to
+# Cloud Controller and UAA (insecure; suitable for private CA / lab environments).
+CONFIG_HTTPS_VERIFY = False
+
 CONFIG_API_MAX_RETRIES = 3
 CONFIG_API_MAX_RETRIES_OPTIONAL = 2
 CONFIG_API_INITIAL_BACKOFF = 2.0

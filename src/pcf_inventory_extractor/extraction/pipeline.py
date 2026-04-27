@@ -10,6 +10,11 @@ from pathlib import Path
 from typing import TextIO
 
 from pcf_inventory_extractor.client import CfApiClient
+from pcf_inventory_extractor.client.uaa_auth import (
+    CfProgrammaticAuthError,
+    fetch_access_token,
+    normalize_api_base,
+)
 from pcf_inventory_extractor.constants import CONFIG_CSV_TIMESTAMP_FORMAT, CONFIG_OUTPUT_PREFIX
 from pcf_inventory_extractor.extraction import org
 from pcf_inventory_extractor.output.csv import write_header
@@ -26,6 +31,29 @@ class ExtractConfig:
     org_name: str
     output_path: Path
     debug: bool = False
+    cf_api_url: str | None = None
+    cf_username: str | None = None
+    cf_password: str | None = None
+
+
+def _password_nonempty(cfg: ExtractConfig) -> bool:
+    return cfg.cf_password is not None and cfg.cf_password != ""
+
+
+def _programmatic_login_requested(cfg: ExtractConfig) -> bool:
+    a = (cfg.cf_api_url or "").strip()
+    u = (cfg.cf_username or "").strip()
+    return bool(a or u or _password_nonempty(cfg))
+
+
+def _programmatic_login_complete(cfg: ExtractConfig) -> bool:
+    a = (cfg.cf_api_url or "").strip()
+    u = (cfg.cf_username or "").strip()
+    return bool(a and u and _password_nonempty(cfg))
+
+
+def _programmatic_login_partial(cfg: ExtractConfig) -> bool:
+    return _programmatic_login_requested(cfg) and not _programmatic_login_complete(cfg)
 
 
 def validate_cf_environment() -> None:
@@ -86,8 +114,21 @@ class InventoryExtractor:
         return True
 
     def run(self) -> None:
-        validate_cf_environment()
-        self.client.connect()
+        if _programmatic_login_partial(self.cfg):
+            raise CfProgrammaticAuthError(
+                "CF API URL, username, and password are all required for programmatic login."
+            )
+        if _programmatic_login_complete(self.cfg):
+            api = normalize_api_base(self.cfg.cf_api_url or "")
+            token = fetch_access_token(
+                api,
+                (self.cfg.cf_username or "").strip(),
+                self.cfg.cf_password or "",
+            )
+            self.client.connect_with_token(api, token)
+        else:
+            validate_cf_environment()
+            self.client.connect()
         try:
             self._out = open(
                 self.cfg.output_path, "w", encoding="utf-8", newline=""
