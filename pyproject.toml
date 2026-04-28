@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pcf-inventory-extractor"
+version = "2.1.1"
+description = "Cloud Foundry (PCF) v3 metadata to CSV"
+readme = "README.md"
+license = { text = "BSD-3-Clause" }
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "pydantic>=2.10.0",
+    "jinja2>=3.1.0",
+    "python-multipart>=0.0.9",
+]
+
+[project.scripts]
+pcf-inventory-extract = "pcf_inventory_extractor.cli:main"
+pcf-inventory-serve = "pcf_inventory_extractor.web:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.8.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "ruff>=0.15.11",
+]

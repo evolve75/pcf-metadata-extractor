@@ -145,3 +145,49 @@ This tool is **optimized for PCF to OpenShift migrations** with critical data fo
 - **Service Mapping:** Document service dependencies and bindings
 - **Docker Adoption:** Identify containerized vs buildpack-based applications
 - **Compliance Reporting:** Extract configuration data for compliance reviews
+
+## Python implementation (`pcf-inventory-extractor`)
+
+The same CF v3 logic is available as a **Python** package (HTTP via **httpx**, no `jq` at runtime). The original **bash** script `extract-pcf-inventory.sh` remains in the repo as a **reference** implementation.
+
+### Requirements
+
+- Python 3.12+ (see `.python-version`; use **uv** to install the pinned interpreter)
+- **CLI:** Cloud Foundry CLI (`cf`) installed and logged in (`cf login`); `pcf-inventory-extract` uses `cf api` and `cf oauth-token` for the API base URL and bearer token.
+- **Web UI:** No `cf` session required. You enter the CF API URL (same as `cf login -a`), username, and password; the server performs a UAA password grant and calls the v3 API with the returned bearer token. Use TLS in front of the app for production. SSO-only foundations may disable password grants.
+- **TLS:** Outbound HTTPS to Cloud Controller and UAA does **not** verify server certificates by default (`CONFIG_HTTPS_VERIFY` in [`src/pcf_inventory_extractor/constants.py`](src/pcf_inventory_extractor/constants.py)). Set it to `True` to enforce standard certificate validation (recommended for internet-facing endpoints).
+
+### Install (uv)
+
+```bash
+uv sync
+# optional dev tools (ruff, pytest)
+uv sync --all-groups
+```
+
+### CLI (same flags as the shell script)
+
+```bash
+uv run pcf-inventory-extract <org_name> [-o output.csv] [-d]
+```
+
+### Web UI
+
+```bash
+uv run pcf-inventory-serve --host 127.0.0.1 --port 8080
+```
+
+Add **`--open`** to launch the app in your **default browser** shortly after the server starts (handy on a desktop; in headless or remote-SSH setups it may do nothing or open on the remote display). If you bind with **`--host 0.0.0.0`** or **`::`**, the opened URL is **`http://127.0.0.1:<port>/`**, because those addresses mean “listen on all interfaces,” not a URL the browser can open.
+
+```bash
+uv run pcf-inventory-serve --host 127.0.0.1 --port 8080 --open
+```
+
+Open the URL (or use **`--open`**), enter the CF API URL, username, password, org name, optional output path, optional debug, and submit to **download** the CSV. After a successful download, the page shows the saved filename and notes that it is in your browser's default Downloads folder (or wherever the browser is configured to save files).
+
+### Develop
+
+```bash
+uv run ruff check src tests
+uv run pytest
+```

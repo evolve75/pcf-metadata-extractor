@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Help — pcf-inventory-extractor</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-masthead" role="banner">
+      <div class="app-masthead__inner">
+        <h1 class="app-masthead__title">PCF metadata extractor</h1>
+      </div>
+    </header>
+    <main class="app-main">
+      <div class="app-card">
+        <span class="app-eyebrow">Documentation</span>
+        <h1>Help</h1>
+        <p class="app-lead">CLI equivalent: <code>pcf-inventory-extract &lt;org&gt; [-o file] [-d]</code> (requires <code>cf login</code> on the host).</p>
+        <h2 class="app-section-title">Options</h2>
+        <ul class="app-list">
+          <li><strong>org</strong> — required Cloud Foundry organization name</li>
+          <li><strong>-o / output file</strong> — optional path for the CSV; default is
+            <code>pcfusage_&lt;org&gt;_YYYYMMDDHHMMSS.csv</code> in the server process working directory</li>
+          <li><strong>-d / debug</strong> — extra diagnostics to server stderr</li>
+        </ul>
+        <h2 class="app-section-title">Web UI</h2>
+        <p>The web form asks for the CF API URL (same as <code>cf login -a</code>), username, password, and org. The server obtains a bearer token from UAA and runs the extract; it does not rely on a <code>cf</code> CLI session in your home directory. SSO-only foundations may reject password login.</p>
+        <p class="app-footnav"><a href="/">Back to form</a></p>
+      </div>
+    </main>
+    <footer class="app-footer">
+      <p class="app-footer__tagline">PCF inventory extractor · v3 API</p>
+      <p class="app-footer__legal">
+        Copyright © 2026 the pcf-inventory-extractor authors. Licensed under the
+        <a href="https://opensource.org/licenses/BSD-3-Clause" rel="license noopener noreferrer" target="_blank">BSD 3-Clause License</a>
+        (SPDX: <code>BSD-3-Clause</code>).
+      </p>
+    </footer>
+  </div>
+</body>
+</html>
