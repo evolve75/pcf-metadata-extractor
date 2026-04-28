@@ -48,6 +48,19 @@
                 title="Cloud Foundry API base URL (cf login -a)."
               />
             </p>
+            <p class="app-checkbox">
+              <input
+                name="disable_ssl_verify"
+                type="checkbox"
+                value="on"
+                id="disable_ssl_verify"
+                title="When enabled, the server will not verify SSL/TLS certificates. Use only for self-signed certificates in lab environments."
+              />
+              <label
+                for="disable_ssl_verify"
+                title="When enabled, the server will not verify SSL/TLS certificates. Use only for self-signed certificates in lab environments."
+              >Disable SSL verification</label>
+            </p>
             <p>
               <label
                 for="cf_username"

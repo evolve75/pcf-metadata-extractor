@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import threading
 import webbrowser
 from pathlib import Path
@@ -29,6 +30,23 @@ def get_templates() -> Jinja2Templates:
     if _TEMPL is None:
         _TEMPL = Jinja2Templates(directory=str(TEMPLATES))
     return _TEMPL
+
+
+def sanitize_output_filename(filename: str) -> str:
+    """Extract just the filename component, reject paths."""
+    # Remove any path components
+    name = filename.strip()
+    # Reject if contains path separators
+    if '/' in name or '\\' in name or name.startswith('.'):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid output filename. Only simple filenames are allowed (no paths)."
+        )
+    # Additional sanitization
+    name = re.sub(r'[/\\:*?"<>|\x00-\x1f]', '_', name)
+    if not name or name == '.':
+        raise HTTPException(status_code=400, detail="Invalid output filename.")
+    return name
 
 
 def create_app() -> FastAPI:
@@ -61,6 +79,7 @@ def create_app() -> FastAPI:
         cf_password: str = Form(..., min_length=1, description="CF password"),
         output_path: str = Form(""),
         debug: str | None = Form(default=None),
+        disable_ssl_verify: str | None = Form(default=None),
     ) -> FileResponse:
         org = org_name.strip()
         if not org:
@@ -69,9 +88,14 @@ def create_app() -> FastAPI:
                 detail="Organization name is required and cannot be only whitespace.",
             )
         is_debug = (debug or "").strip().lower() in ("on", "true", "1", "yes")
+        is_ssl_disabled = (disable_ssl_verify or "").strip().lower() in ("on", "true", "1", "yes")
+        https_verify = not is_ssl_disabled  # Invert: checkbox is "disable", config is "verify"
+
         o = (output_path or "").strip()
         if o:
-            out = Path(o).expanduser()
+            # Validate that it's just a filename, not a path
+            safe_filename = sanitize_output_filename(o)
+            out = Path(safe_filename)
         else:
             out = Path(default_output_name(org))
         cfg = ExtractConfig(
@@ -81,6 +105,7 @@ def create_app() -> FastAPI:
             cf_api_url=cf_api_url.strip(),
             cf_username=cf_username.strip(),
             cf_password=cf_password,
+            https_verify=https_verify,
         )
         try:
             run_extraction(cfg)

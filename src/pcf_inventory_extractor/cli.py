@@ -31,6 +31,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Verbose diagnostic output to stderr",
     )
+    p.add_argument(
+        "--insecure",
+        action="store_true",
+        help="Disable SSL certificate verification (insecure; use only for self-signed certs)",
+    )
     return p
 
 
@@ -45,6 +50,7 @@ def main() -> None:
         org_name=args.org_name,
         output_path=path,
         debug=bool(args.debug),
+        https_verify=not args.insecure,
     )
     try:
         run_extraction(cfg)

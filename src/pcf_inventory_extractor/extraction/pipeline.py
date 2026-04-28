@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -21,9 +22,21 @@ from pcf_inventory_extractor.output.csv import write_header
 from pcf_inventory_extractor.utils.helpers import log_debug
 
 
+def sanitize_filename_component(s: str) -> str:
+    """Remove characters that could cause path traversal or filesystem issues."""
+    # Remove path separators and dangerous characters
+    s = re.sub(r'[/\\:*?"<>|\x00-\x1f]', '_', s)
+    # Remove leading dots to prevent hidden files
+    s = s.lstrip('.')
+    # Limit length
+    s = s[:100]
+    return s or "unknown"
+
+
 def default_output_name(org: str) -> str:
     ts = datetime.now().strftime(CONFIG_CSV_TIMESTAMP_FORMAT)
-    return f"{CONFIG_OUTPUT_PREFIX}_{org}_{ts}.csv"
+    safe_org = sanitize_filename_component(org)
+    return f"{CONFIG_OUTPUT_PREFIX}_{safe_org}_{ts}.csv"
 
 
 @dataclass
@@ -34,6 +47,7 @@ class ExtractConfig:
     cf_api_url: str | None = None
     cf_username: str | None = None
     cf_password: str | None = None
+    https_verify: bool = True
 
 
 def _password_nonempty(cfg: ExtractConfig) -> bool:
@@ -88,6 +102,7 @@ class InventoryExtractor:
         self.org_sg = ""
         self.global_sg = ""
         self.debug = cfg.debug
+        self.https_verify = cfg.https_verify
         self.warning_count = 0
         self._out: TextIO | None = None
 
@@ -124,11 +139,12 @@ class InventoryExtractor:
                 api,
                 (self.cfg.cf_username or "").strip(),
                 self.cfg.cf_password or "",
+                https_verify=self.cfg.https_verify,
             )
-            self.client.connect_with_token(api, token)
+            self.client.connect_with_token(api, token, https_verify=self.cfg.https_verify)
         else:
             validate_cf_environment()
-            self.client.connect()
+            self.client.connect(https_verify=self.cfg.https_verify)
         try:
             self._out = open(
                 self.cfg.output_path, "w", encoding="utf-8", newline=""
