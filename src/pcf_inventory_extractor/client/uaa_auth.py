@@ -101,11 +101,13 @@ def discover_token_endpoint_with_client(api_base: str, client: httpx.Client) -> 
     )
 
 
-def discover_token_endpoint(api_base: str, timeout: float = 120.0) -> str:
+def discover_token_endpoint(
+    api_base: str, timeout: float = 120.0, https_verify: bool = CONFIG_HTTPS_VERIFY
+) -> str:
     with httpx.Client(
         timeout=timeout,
         follow_redirects=True,
-        verify=CONFIG_HTTPS_VERIFY,
+        verify=https_verify,
     ) as client:
         return discover_token_endpoint_with_client(api_base, client)
 
@@ -117,6 +119,7 @@ def fetch_access_token(
     *,
     timeout: float = 120.0,
     transport: httpx.BaseTransport | None = None,
+    https_verify: bool = CONFIG_HTTPS_VERIFY,
 ) -> str:
     """
     Return a bearer access_token for CF v3 API calls.
@@ -146,7 +149,7 @@ def fetch_access_token(
     client_kw: dict[str, Any] = {
         "timeout": timeout,
         "follow_redirects": True,
-        "verify": CONFIG_HTTPS_VERIFY,
+        "verify": https_verify,
     }
     if transport is not None:
         client_kw["transport"] = transport

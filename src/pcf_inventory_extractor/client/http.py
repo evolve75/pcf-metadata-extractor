@@ -49,12 +49,12 @@ def _get_cf_token() -> str:
 
 
 def _request_url(
-    full_url: str, headers: dict[str, str], timeout: float
+    full_url: str, headers: dict[str, str], timeout: float, verify: bool = True
 ) -> tuple[int, str, str]:
     with httpx.Client(
         timeout=timeout,
         follow_redirects=True,
-        verify=CONFIG_HTTPS_VERIFY,
+        verify=verify,
     ) as c:
         r = c.get(full_url, headers=headers)
     return r.status_code, r.text, (r.headers.get("content-type") or "")
@@ -97,6 +97,7 @@ def fetch_with_retry(
     headers: dict[str, str],
     max_retries: int = CONFIG_API_MAX_RETRIES,
     timeout: float = 120.0,
+    https_verify: bool = CONFIG_HTTPS_VERIFY,
 ) -> str:
     """path_or_url: either '/v3/...' or full https URL (pagination)."""
     if path_or_url.startswith("http://") or path_or_url.startswith("https://"):
@@ -109,7 +110,7 @@ def fetch_with_retry(
     last_err: str = ""
     while attempt <= max_retries:
         try:
-            status, body, _ = _request_url(url, headers, timeout)
+            status, body, _ = _request_url(url, headers, timeout, verify=https_verify)
         except httpx.HTTPError as e:
             last_err = str(e)
             err_type = classify_error("", last_err, 1)
@@ -152,8 +153,10 @@ class CfApiClient:
         self.api_base: str = ""
         self._headers: dict[str, str] = {}
         self._httpx_client: httpx.Client | None = None
+        self._https_verify: bool = CONFIG_HTTPS_VERIFY
 
-    def connect(self) -> None:
+    def connect(self, https_verify: bool = CONFIG_HTTPS_VERIFY) -> None:
+        self._https_verify = https_verify
         self.api_base = _get_cf_api_base()
         token = _get_cf_token()
         self._headers = {"Authorization": f"Bearer {token}"}
@@ -161,10 +164,13 @@ class CfApiClient:
             timeout=self._timeout,
             follow_redirects=True,
             headers=self._headers,
-            verify=CONFIG_HTTPS_VERIFY,
+            verify=self._https_verify,
         )
 
-    def connect_with_token(self, api_base: str, access_token: str) -> None:
+    def connect_with_token(
+        self, api_base: str, access_token: str, https_verify: bool = CONFIG_HTTPS_VERIFY
+    ) -> None:
+        self._https_verify = https_verify
         base = (api_base or "").strip().rstrip("/")
         if not base:
             raise RuntimeError("api_base is empty")
@@ -177,7 +183,7 @@ class CfApiClient:
             timeout=self._timeout,
             follow_redirects=True,
             headers=self._headers,
-            verify=CONFIG_HTTPS_VERIFY,
+            verify=self._https_verify,
         )
 
     def close(self) -> None:
