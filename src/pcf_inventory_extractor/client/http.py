@@ -14,6 +14,7 @@ from pcf_inventory_extractor.constants import (
     CONFIG_API_INITIAL_BACKOFF,
     CONFIG_API_MAX_RETRIES,
     CONFIG_API_MAX_RETRIES_OPTIONAL,
+    CONFIG_HTTPS_VERIFY,
 )
 
 FetchFn = Callable[[str, str, int], str]
@@ -50,7 +51,11 @@ def _get_cf_token() -> str:
 def _request_url(
     full_url: str, headers: dict[str, str], timeout: float
 ) -> tuple[int, str, str]:
-    with httpx.Client(timeout=timeout, follow_redirects=True) as c:
+    with httpx.Client(
+        timeout=timeout,
+        follow_redirects=True,
+        verify=CONFIG_HTTPS_VERIFY,
+    ) as c:
         r = c.get(full_url, headers=headers)
     return r.status_code, r.text, (r.headers.get("content-type") or "")
 
@@ -156,6 +161,23 @@ class CfApiClient:
             timeout=self._timeout,
             follow_redirects=True,
             headers=self._headers,
+            verify=CONFIG_HTTPS_VERIFY,
+        )
+
+    def connect_with_token(self, api_base: str, access_token: str) -> None:
+        base = (api_base or "").strip().rstrip("/")
+        if not base:
+            raise RuntimeError("api_base is empty")
+        tok = (access_token or "").strip()
+        if not tok:
+            raise RuntimeError("access_token is empty")
+        self.api_base = base
+        self._headers = {"Authorization": f"Bearer {tok}"}
+        self._httpx_client = httpx.Client(
+            timeout=self._timeout,
+            follow_redirects=True,
+            headers=self._headers,
+            verify=CONFIG_HTTPS_VERIFY,
         )
 
     def close(self) -> None:

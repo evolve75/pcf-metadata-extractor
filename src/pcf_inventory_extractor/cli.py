@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
+from pcf_inventory_extractor.client import CfProgrammaticAuthError
 from pcf_inventory_extractor.extraction import ExtractConfig, default_output_name
 from pcf_inventory_extractor.run import run_extraction
 
@@ -44,7 +46,11 @@ def main() -> None:
         output_path=path,
         debug=bool(args.debug),
     )
-    run_extraction(cfg)
+    try:
+        run_extraction(cfg)
+    except CfProgrammaticAuthError as e:
+        print(str(e), file=sys.stderr)
+        raise SystemExit(1) from e
 
 
 if __name__ == "__main__":

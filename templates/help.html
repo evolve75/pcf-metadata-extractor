@@ -17,7 +17,7 @@
       <div class="app-card">
         <span class="app-eyebrow">Documentation</span>
         <h1>Help</h1>
-        <p class="app-lead">CLI equivalent: <code>pcf-inventory-extract &lt;org&gt; [-o file] [-d]</code></p>
+        <p class="app-lead">CLI equivalent: <code>pcf-inventory-extract &lt;org&gt; [-o file] [-d]</code> (requires <code>cf login</code> on the host).</p>
         <h2 class="app-section-title">Options</h2>
         <ul class="app-list">
           <li><strong>org</strong> — required Cloud Foundry organization name</li>
@@ -25,6 +25,8 @@
             <code>pcfusage_&lt;org&gt;_YYYYMMDDHHMMSS.csv</code> in the server process working directory</li>
           <li><strong>-d / debug</strong> — extra diagnostics to server stderr</li>
         </ul>
+        <h2 class="app-section-title">Web UI</h2>
+        <p>The web form asks for the CF API URL (same as <code>cf login -a</code>), username, password, and org. The server obtains a bearer token from UAA and runs the extract; it does not rely on a <code>cf</code> CLI session in your home directory. SSO-only foundations may reject password login.</p>
         <p class="app-footnav"><a href="/">Back to form</a></p>
       </div>
     </main>
